@@ -4,6 +4,13 @@ Notable changes to the Git panel bundle, newest first. Versions follow SemVer;
 the market index pins each release to the commit that changed the package
 payload, so a release tag and an index entry always describe the same code.
 
+Each release lists what changed from the reader's side: features under `Added`,
+moved or reshaped behaviour under `Changed`, corrected behaviour under `Fixed`.
+
+## Unreleased
+
+- Nothing yet.
+
 ## 1.4.3
 
 ### Added
