@@ -360,6 +360,8 @@ window.__ModuleLoader__.load({
     const IDLE_PATCH = Object.freeze({ phase: 'idle', path: null, data: null, error: null })
     /** No child directory was probed yet for a path. */
     const EMPTY_BROWSE_ENTRIES = Object.freeze([])
+    /** No lane continues below a graph row. */
+    const EMPTY_LANE_COLORS = Object.freeze([])
     /** Stand-in snapshots keep the selector hooks callable when the kit omits them. */
     const EMPTY_SESSION_STATE = Object.freeze({ byId: {}, phase: 'ready' })
     const EMPTY_WORKSPACE_STATE = Object.freeze({ items: EMPTY_FILES, phase: 'ready' })
@@ -538,7 +540,10 @@ window.__ModuleLoader__.load({
 .dsh-git-subject{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .dsh-git-author{flex:none;margin-left:-8px;padding-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--dsh-git-faint)}
 .dsh-git-time{flex:none;margin-left:-8px;padding-left:8px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--dsh-git-faint);font-variant-numeric:tabular-nums}
-.dsh-git-detail{display:flex;flex-direction:column;gap:6px;margin:0 12px 6px 0;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1)}
+.dsh-git-detail{display:flex;flex-direction:column;gap:6px;margin:0 12px 0 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1)}
+.dsh-git-detailRow{display:flex;align-items:stretch;min-width:0;margin-bottom:6px;position:relative}
+.dsh-git-detailGraph{flex:none;margin-left:2px;position:relative;align-self:stretch}
+.dsh-git-detailLane{position:absolute;top:0;bottom:-6px;width:1.5px;pointer-events:none}
 .dsh-git-detailHead{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .dsh-git-detailAuthor{color:var(--dsw-alias-label-primary)}
 .dsh-git-detailSep{color:var(--dsw-alias-label-tertiary)}
@@ -1301,6 +1306,7 @@ window.__ModuleLoader__.load({
           width: Math.max(top.length, bottom.length),
           shapes,
           dot: { x: laneX(lane), colorIndex: dotColor },
+          belowColors: bottomColors.slice(),
         })
         lanes = bottom
         laneColors = bottomColors
@@ -1782,7 +1788,6 @@ window.__ModuleLoader__.load({
         detail,
         openFilePatch,
         t,
-        graphWidth,
         refColor,
         onCopy,
         onRetry,
@@ -1920,8 +1925,26 @@ window.__ModuleLoader__.load({
         className: 'dsh-git-detail',
         role: 'region',
         'aria-label': t('detail.title'),
-        style: { marginLeft: graphWidth + 8 },
       }, children)
+    }
+
+    /**
+     * Render the lane lines that run beside an expanded commit detail.
+     *
+     * The expanded row's own SVG ends at the row edge, so without these the graph
+     * looks cut where a detail is open. The lanes painted here are exactly the
+     * ones the next row's top edge continues.
+     * @param row - graph row produced by {@link buildGraph}.
+     * @returns the absolutely positioned line elements.
+     */
+    function renderDetailLanes(row) {
+      const colors = Array.isArray(row.belowColors) ? row.belowColors : EMPTY_LANE_COLORS
+      return colors.map((colorIndex, lane) => h('span', {
+        key: 'detail-lane-' + lane,
+        className: 'dsh-git-detailLane',
+        style: { left: (laneX(lane) - 0.75) + 'px', backgroundColor: laneColor(colorIndex) },
+        'aria-hidden': 'true',
+      }))
     }
 
     /**
@@ -3476,24 +3499,31 @@ window.__ModuleLoader__.load({
               onToggle: () => { toggleCommit(hash) },
             }),
             expanded
-              ? renderCommitDetail({
-                detail,
-                openFilePatch,
-                t,
-                graphWidth,
-                refColor: row.dot.colorIndex,
-                onCopy: (value) => { void copyHash(value) },
-                onRetry: retryCommitDetail,
-                onToggleFile: toggleCommitFile,
-                onRetryFile: retryCommitPatch,
-                onExplain: (data) => {
-                  fillDraft(t('ai.promptCommit', {
-                    root: promptRoot,
-                    short: data.short !== '' ? data.short : shortOf(data.hash),
-                    subject: data.subject,
-                  }))
-                },
-              })
+              ? h('div', { key: 'expanded', className: 'dsh-git-detailRow' }, [
+                h('div', {
+                  key: 'graph',
+                  className: 'dsh-git-detailGraph',
+                  style: { width: graphWidth },
+                  'aria-hidden': 'true',
+                }, renderDetailLanes(row)),
+                renderCommitDetail({
+                  detail,
+                  openFilePatch,
+                  t,
+                  refColor: row.dot.colorIndex,
+                  onCopy: (value) => { void copyHash(value) },
+                  onRetry: retryCommitDetail,
+                  onToggleFile: toggleCommitFile,
+                  onRetryFile: retryCommitPatch,
+                  onExplain: (data) => {
+                    fillDraft(t('ai.promptCommit', {
+                      root: promptRoot,
+                      short: data.short !== '' ? data.short : shortOf(data.hash),
+                      subject: data.subject,
+                    }))
+                  },
+                }),
+              ])
               : null,
           ]))
         }

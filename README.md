@@ -10,7 +10,7 @@ A VSCode-style Git view for the [DeepSeek Harness](https://github.com/deepseek-a
 
 - **Source control** — staged and changed file groups, per-file and whole-group stage/unstage, commit message with `Ctrl/Cmd+Enter`, branch switch, ahead/behind counts, refresh, and a unified diff view.
 - **Commit graph** — newest commits with branch lanes; lanes are packed against the left edge (a lane that ends pulls the lanes to its right one column left in the same row), so no empty lane ever sits in front of a line. A lane keeps its colour for the whole branch line instead of changing at merge points, and branch/tag labels take the colour of the commit's lane. Branch refs collapse to the current branch plus a `+N` badge; the full list is in the commit detail.
-- **Inline commit details** — click a commit to expand it below the row: author, full local date and time (`toLocaleString`), full hash (copy button), parents, refs, changed files with `+N −M`, and an inline patch per file. One commit and one file expand at a time.
+- **Inline commit details** — click a commit to expand it below the row: author, full local date and time (`toLocaleString`), full hash (copy button), parents, refs, changed files with `+N −M`, and an inline patch per file. One commit and one file expand at a time; the graph lanes keep running beside the expanded block, so a line never breaks at a detail.
 - **Aligned, resizable columns** — the author/time columns are aligned across rows and can be dragged (invisible 6 px hotspots, double-click resets); widths persist locally.
 - **Resizable split** — the 1 px divider between the panes is always visible, highlights on hover, drags between 280 px and 70 % of the view, and resets on double-click.
 - **Cascading repository picker** — choose the Session working directory, the repository root, or drill into one directory level at a time; a level is probed only when you expand it, so opening the menu never scans a whole tree (build/dependency directories are skipped).
@@ -108,7 +108,7 @@ DeepSeek Harness（DSH）Web GUI 的 VSCode 风格 Git 视图。它作为会话�
 
 - **源代码管理**：已暂存/更改两组文件、单文件和整组暂存/取消暂存、提交信息（`Ctrl/Cmd+Enter` 提交）、分支切换、领先/落后提交数、刷新、文件 diff。
 - **提交图**：泳道始终贴着左边排，某条泳道结束后，右边泳道在同一行里左移一格，所以不会出现「线前面空一格」；分支泳道颜色跟着分支线走，合并点前后同色，分支名/标签名用所在泳道线的颜色做底色；分支标签压缩成当前分支加 `+N`，完整列表在提交详情里。
-- **行内提交详情**：点提交行在下方展开——作者、完整本地时间（`toLocaleString`）、完整 hash（可复制）、父提交、refs、改动文件和每个文件的行内 patch；同时只展开一个提交、一个文件。
+- **行内提交详情**：点提交行在下方展开——作者、完整本地时间（`toLocaleString`）、完整 hash（可复制）、父提交、refs、改动文件和每个文件的行内 patch；同时只展开一个提交、一个文件；展开区左侧保持轨道线连续，连线不会在详情处断开。
 - **列对齐与可拖列宽**：作者/时间列统一对齐，列边界有 6px 隐形热区可拖动，双击复位，宽度记在本地。
 - **可拖分栏**：左右分栏之间 1px 细线常显，悬停高亮，拖动范围 280px–视图 70%，双击复位。
 - **级联仓库选择**：会话工作目录、仓库根目录，以及逐层下钻的目录；只有展开某一层时才探测该层，打开菜单不会扫整棵树（跳过构建/依赖目录）。
