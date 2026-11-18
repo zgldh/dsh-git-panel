@@ -2,7 +2,7 @@
 
 English | [中文](#中文说明)
 
-A VSCode-style Git view for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web GUI. It lives next to **Chat** and **Trajectory** as a per-Session **Git** tab, so every Session operates on its own working directory — including Git repositories nested inside it.
+A VS Code-style Git view for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web GUI. It lives next to **Chat** and **Trajectory** as a per-Session **Git** tab, so every Session operates on its own working directory — including Git repositories nested inside it.
 
 ## Features
 
@@ -103,7 +103,7 @@ node scripts/build-index.mjs --check  # fail when index.json is stale
 
 ## 中文说明
 
-DeepSeek Harness（DSH）Web GUI 的 VSCode 风格 Git 视图。它作为会话视图标签放在「对话」「轨迹」右边，名字是「Git」，按当前会话的工作目录工作；工作目录下面还有别的 Git 仓库时也能直接切过去。
+DeepSeek Harness（DSH）Web GUI 的 VS Code 风格 Git 视图。它作为会话视图标签放在「对话」「轨迹」右边，名字是「Git」，按当前会话的工作目录工作；工作目录下面还有别的 Git 仓库时也能直接切过去。
 
 ### 功能
 
