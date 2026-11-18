@@ -2,7 +2,8 @@
  * Direct tests for the Git panel Host service. Runs outside the Harness
  * against throwaway repositories: repository resolution, status parsing,
  * diffs, index changes, commits, branch history (parents and ref labels),
- * branch switching, path validation, and the HTTP request handler.
+ * branch switching, path validation, cascading directory browsing, and the
+ * HTTP request handler.
  *
  * Usage: node test/git-core.test.mjs
  */
@@ -14,8 +15,8 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 
 import {
+  browseDirectory,
   createGitService,
-  discoverSubrepositories,
   normalizeConfig,
   normalizeFileArgument,
   parseStatus,
@@ -75,50 +76,115 @@ try {
     assert.equal(config.logLimit, 80)
     assert.equal(config.signCommits, false)
     assert.equal(config.includeAllRefs, false)
-    assert.equal(config.subrepoDepth, 3)
-    assert.equal(config.subrepoLimit, 50)
+    assert.equal(config.browseLimit, 200)
     assert.ok(config.skipDirectories.includes('node_modules'))
     assert.deepEqual(config.allowRoots, [])
     assert.throws(() => normalizeConfig({ logLimit: 1 }), /logLimit/)
-    assert.throws(() => normalizeConfig({ subrepoDepth: 0 }), /subrepoDepth/)
+    assert.throws(() => normalizeConfig({ browseLimit: 0 }), /browseLimit/)
+    assert.throws(() => normalizeConfig({ browseLimit: 10001 }), /browseLimit/)
+    assert.throws(() => normalizeConfig({ browseLimit: 1.5 }), /browseLimit/)
     assert.throws(() => normalizeConfig({ allowRoots: 'nope' }), /allowRoots/)
   })
 
-  await test('sub-repositories below a plain directory are discovered within the bounds', async () => {
-    const base = path.join(workspace, 'subrepo-base')
-    const inner = initRepo(path.join(base, 'group', 'inner-repo'))
-    const shallow = initRepo(path.join(base, 'shallow-repo'))
-    const skipped = initRepo(path.join(base, 'node_modules', 'hidden-repo'))
-    const hidden = initRepo(path.join(base, '.hidden', 'hidden-repo'))
-    const deep = initRepo(path.join(base, 'a', 'b', 'c', 'deep-repo'))
-    mkdirSync(path.join(base, 'plain-dir'), { recursive: true })
+  await test('browse lists only direct subdirectories with repository and drill-down flags', async () => {
+    const base = path.join(workspace, 'browse-base')
+    const parentRepo = initRepo(path.join(base, 'parent-repo'))
+    const grandchildRepo = initRepo(path.join(parentRepo, 'grandchild-repo'))
+    const plainParent = path.join(base, 'plain-with-child')
+    mkdirSync(path.join(plainParent, 'child'), { recursive: true })
+    mkdirSync(path.join(base, 'leaf-dir'), { recursive: true })
+    mkdirSync(path.join(base, 'node_modules', 'dependency'), { recursive: true })
+    initRepo(path.join(base, 'node_modules', 'hidden-repo'))
+    initRepo(path.join(base, '.hidden', 'hidden-repo'))
+    writeFileSync(path.join(base, 'loose-file.txt'), 'not a directory\n')
+    const worktree = path.join(base, 'worktree-repo')
+    git(parentRepo, ['worktree', 'add', worktree, '-b', 'worktree-branch'])
 
-    const config = normalizeConfig({ subrepoDepth: 2 })
-    const result = await discoverSubrepositories(base, config)
-    const found = result.items.map((item) => item.path).sort()
-    assert.deepEqual(found, [path.resolve(shallow), path.resolve(inner)].sort())
-    assert.equal(result.items.every((item) => item.rel !== ''), true)
-    assert.equal(result.base, path.resolve(base))
+    const config = normalizeConfig({})
+    const result = await browseDirectory(base, config)
+    assert.equal(result.dir, path.resolve(base))
+    assert.equal(result.isRepo, false)
     assert.equal(result.repoRoot, null)
     assert.equal(result.truncated, false)
-    assert.equal(found.includes(path.resolve(skipped)), false)
-    assert.equal(found.includes(path.resolve(hidden)), false)
-    assert.equal(found.includes(path.resolve(deep)), false)
+    assert.deepEqual(
+      result.entries.map((entry) => entry.name),
+      ['parent-repo', 'plain-with-child', 'worktree-repo'],
+    )
+    const parentEntry = result.entries[0]
+    assert.equal(parentEntry.path, path.resolve(parentRepo))
+    assert.equal(parentEntry.isRepo, true)
+    assert.equal(parentEntry.hasChildren, true)
+    const plainEntry = result.entries[1]
+    assert.equal(plainEntry.isRepo, false)
+    assert.equal(plainEntry.hasChildren, true)
+    const worktreeEntry = result.entries[2]
+    assert.equal(worktreeEntry.path, path.resolve(worktree))
+    assert.equal(worktreeEntry.isRepo, true, 'a linked worktree carries a .git file')
+    assert.equal(worktreeEntry.hasChildren, false)
+    assert.equal(result.entries.some((entry) => entry.name === 'node_modules'), false, 'skipDirectories must not be listed')
+    assert.equal(
+      result.entries.some((entry) => entry.name === path.basename(grandchildRepo)),
+      false,
+      'a grandchild directory must not be listed at this level',
+    )
+    assert.equal(result.entries.some((entry) => entry.name === 'leaf-dir'), false, 'a dead-end leaf must not be listed')
 
-    const limited = await discoverSubrepositories(base, normalizeConfig({ subrepoDepth: 4, subrepoLimit: 1 }))
-    assert.equal(limited.items.length, 1)
+    const descent = await browseDirectory(parentRepo, config)
+    assert.equal(descent.repoRoot, path.resolve(parentRepo))
+    assert.equal(descent.isRepo, true)
+    assert.deepEqual(
+      descent.entries.map((entry) => entry.name),
+      [path.basename(grandchildRepo)],
+    )
+    assert.equal(descent.entries[0].isRepo, true)
+    assert.equal(descent.entries[0].hasChildren, false)
+
+    const limited = await browseDirectory(base, normalizeConfig({ browseLimit: 1 }))
+    assert.equal(limited.entries.length, 1)
     assert.equal(limited.truncated, true)
   })
 
-  await test('the subrepo service reports the enclosing repository and nested repositories', async () => {
-    const localRepo = initRepo(path.join(workspace, 'subrepo-service'))
-    const nested = initRepo(path.join(localRepo, 'tools', 'nested-repo'))
-    const inside = await createGitService({}).subrepos(path.join(localRepo, 'tools'))
-    assert.equal(inside.repoRoot, path.resolve(localRepo))
-    assert.equal(inside.items.some((item) => item.path === path.resolve(nested)), true)
-    const outside = await createGitService({}).subrepos(path.join(workspace, 'subrepo-base'))
-    assert.equal(outside.repoRoot, null)
-    await assert.rejects(() => createGitService({}).subrepos(path.join(workspace, 'missing')), /目录不存在/)
+  await test('the browse service reports the enclosing repository and sibling repositories', async () => {
+    const group = path.join(workspace, 'browse-group')
+    const first = initRepo(path.join(group, 'first-repo'))
+    const second = initRepo(path.join(group, 'second-repo'))
+    mkdirSync(path.join(first, 'src'), { recursive: true })
+
+    const service = createGitService({})
+    const listed = await service.browse(group)
+    assert.equal(listed.dir, path.resolve(group))
+    assert.equal(listed.repoRoot, null)
+    assert.equal(listed.isRepo, false)
+    assert.deepEqual(
+      listed.entries.map((entry) => entry.path),
+      [path.resolve(first), path.resolve(second)],
+    )
+    assert.equal(listed.entries.every((entry) => entry.isRepo), true)
+    assert.equal(listed.entries[0].hasChildren, true, 'first-repo holds a subdirectory')
+    assert.equal(listed.entries[1].hasChildren, false, 'second-repo holds no subdirectory')
+
+    const inside = await service.browse(first)
+    assert.equal(inside.repoRoot, path.resolve(first))
+    assert.equal(inside.isRepo, true)
+    const insideSubdirectory = await service.browse(path.join(first, 'src'))
+    assert.equal(insideSubdirectory.repoRoot, path.resolve(first))
+    assert.equal(insideSubdirectory.isRepo, false)
+    assert.deepEqual(insideSubdirectory.entries, [])
+
+    const response = await service.handle(
+      new Request('http://127.0.0.1/api/git-ui', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'browse', dir: group }),
+      }),
+    )
+    const body = await response.json()
+    assert.equal(body.ok, true)
+    assert.equal(body.value.dir, path.resolve(group))
+
+    await assert.rejects(() => service.browse(path.join(workspace, 'missing')), /目录不存在/)
+    const notADirectory = path.join(workspace, 'not-a-directory.txt')
+    writeFileSync(notADirectory, 'plain text\n')
+    await assert.rejects(() => service.browse(notADirectory), /不是目录/)
   })
 
   await test('parseStatus handles staged, modified, deleted, untracked, and tracking records', () => {
@@ -320,7 +386,9 @@ try {
     const other = initRepo(path.join(workspace, 'other'))
     const fenced = createGitService({ allowRoots: [path.join(workspace, 'repo')] })
     await assert.rejects(() => fenced.status(other), /outside allowRoots/)
+    await assert.rejects(() => fenced.browse(other), /outside allowRoots/)
     assert.equal((await createGitService({ allowRoots: [workspace] }).status(other)).branch, 'main')
+    assert.equal((await createGitService({ allowRoots: [workspace] }).browse(other)).isRepo, true)
   })
 
   await test('the HTTP handler answers success and failure envelopes', async () => {

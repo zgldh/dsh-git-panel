@@ -70,16 +70,14 @@ window.__ModuleLoader__.load({
       'picker.label': '仓库目录',
       'picker.cwd': '会话工作目录',
       'picker.root': '仓库根目录',
-      'picker.subrepos': '下级 Git 仓库',
-      'picker.loading': '正在查找下级仓库…',
-      'picker.empty': '没有找到下级 Git 仓库。',
-      'picker.error': '查找下级仓库失败',
+      'picker.children': '下级目录',
+      'picker.loading': '正在探测下级目录…',
+      'picker.empty': '这一层没有 Git 仓库。',
+      'picker.error': '探测下级目录失败',
+      'picker.expand': '展开 {name}',
+      'picker.collapse': '收起 {name}',
+      'picker.choose': '切换到 {path}',
       'picker.close': '关闭',
-
-      'time.justNow': '刚刚',
-      'time.minutesAgo': '{count} 分钟前',
-      'time.hoursAgo': '{count} 小时前',
-      'time.daysAgo': '{count} 天前',
 
       'notice.dismiss': '关闭提示',
       'error.unknown': '操作失败',
@@ -200,16 +198,14 @@ window.__ModuleLoader__.load({
       'picker.label': 'Repository directory',
       'picker.cwd': 'Session working directory',
       'picker.root': 'Repository root',
-      'picker.subrepos': 'Nested Git repositories',
-      'picker.loading': 'Looking for nested repositories…',
-      'picker.empty': 'No nested Git repository found.',
-      'picker.error': 'Failed to look for nested repositories',
+      'picker.children': 'Subdirectories',
+      'picker.loading': 'Probing subdirectories…',
+      'picker.empty': 'No Git repository in this level.',
+      'picker.error': 'Failed to probe subdirectories',
+      'picker.expand': 'Expand {name}',
+      'picker.collapse': 'Collapse {name}',
+      'picker.choose': 'Switch to {path}',
       'picker.close': 'Close',
-
-      'time.justNow': 'just now',
-      'time.minutesAgo': '{count} min ago',
-      'time.hoursAgo': '{count} h ago',
-      'time.daysAgo': '{count} d ago',
 
       'notice.dismiss': 'Dismiss message',
       'error.unknown': 'Request failed',
@@ -269,8 +265,6 @@ window.__ModuleLoader__.load({
     const STATUS_POLL_MS = 8000
     /** Milliseconds a notice stays visible before it dismisses itself. */
     const NOTICE_MS = 5000
-    /** Milliseconds between relative-time refreshes. */
-    const CLOCK_MS = 30000
     /** Commit rows requested from the Host half. */
     const LOG_LIMIT = 80
     /** Horizontal distance between two graph lanes, in pixels. */
@@ -364,8 +358,8 @@ window.__ModuleLoader__.load({
     const IDLE_DIFF = Object.freeze({ phase: 'idle', data: null, error: null })
     const IDLE_DETAIL = Object.freeze({ phase: 'idle', hash: null, data: null, error: null })
     const IDLE_PATCH = Object.freeze({ phase: 'idle', path: null, data: null, error: null })
-    const EMPTY_SUBREPOS_ITEMS = Object.freeze([])
-    const IDLE_SUBREPOS = Object.freeze({ phase: 'idle', items: EMPTY_SUBREPOS_ITEMS, error: null, repoRoot: null })
+    /** No child directory was probed yet for a path. */
+    const EMPTY_BROWSE_ENTRIES = Object.freeze([])
     /** Stand-in snapshots keep the selector hooks callable when the kit omits them. */
     const EMPTY_SESSION_STATE = Object.freeze({ byId: {}, phase: 'ready' })
     const EMPTY_WORKSPACE_STATE = Object.freeze({ items: EMPTY_FILES, phase: 'ready' })
@@ -419,7 +413,15 @@ window.__ModuleLoader__.load({
 .dsh-git-pickerPath{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary)}
 .dsh-git-pickerDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary)}
 .dsh-git-pickerHint{margin:0;padding:6px 8px;font-size:11px;line-height:15px;color:var(--dsw-alias-label-tertiary)}
-.dsh-git-pickerList{display:flex;flex-direction:column;gap:1px}
+.dsh-git-pickerHintNested{margin:0;padding:2px 8px 6px 8px;font-size:11px;line-height:15px;color:var(--dsw-alias-label-tertiary)}
+.dsh-git-pickerChildren{display:flex;flex-direction:column;gap:1px}
+.dsh-git-pickerBranch{display:flex;align-items:center;gap:2px;min-width:0}
+.dsh-git-pickerBranch .dsh-git-pickerRow{flex:1;min-width:0;width:auto}
+.dsh-git-pickerDisclosure{flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dsh-git-pickerDisclosure:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsh-git-pickerDisclosure svg{transition:transform .15s ease;transform:rotate(-90deg)}
+.dsh-git-pickerDisclosure[data-open="true"] svg{transform:rotate(0)}
+.dsh-git-pickerDisclosure[data-empty="true"]{visibility:hidden;pointer-events:none}
 .dsh-git-toolbarCenter{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden}
 .dsh-git-toolbarActions{flex:none;display:flex;align-items:center;gap:6px}
 .dsh-git-aiWrap{position:relative;display:inline-flex;align-items:center}
@@ -478,7 +480,7 @@ window.__ModuleLoader__.load({
 .dsh-git-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;padding:0 14px;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:12px;font-weight:500;cursor:pointer}
 .dsh-git-primary:hover:not(:disabled){opacity:.9}
 .dsh-git-primary:disabled{opacity:.45;cursor:default}
-.dsh-git-groups{flex:1;min-height:0;overflow:auto;padding-bottom:12px;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
+.dsh-git-groups{flex:1;min-height:0;overflow:auto;padding-bottom:calc(var(--dsh-composer-height, 152px) + 16px);scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
 .dsh-git-group{display:flex;flex-direction:column}
 .dsh-git-groupHead{display:flex;align-items:center;gap:6px;padding:6px 8px 4px 10px}
 .dsh-git-groupTitle{min-width:0;margin:0;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;line-height:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
@@ -516,7 +518,7 @@ window.__ModuleLoader__.load({
 .dsh-git-pane{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .dsh-git-graphHead{flex:none;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:.5px solid var(--dsw-alias-border-l1);font-size:11px;line-height:16px;color:var(--dsh-git-faint)}
 .dsh-git-graphArea{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.dsh-git-graphScroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
+.dsh-git-graphScroll{flex:1;min-height:0;overflow:auto;padding-bottom:calc(var(--dsh-composer-height, 152px) + 16px);scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
 .dsh-git-graphList{display:flex;flex-direction:column;padding:2px 0}
 .dsh-git-colHandles{position:absolute;top:0;bottom:0;left:0;pointer-events:none;z-index:3}
 .dsh-git-colHandle{position:absolute;top:0;bottom:0;width:6px;pointer-events:auto;cursor:col-resize}
@@ -530,12 +532,9 @@ window.__ModuleLoader__.load({
 .dsh-git-graphSvg{display:block}
 .dsh-git-hash{flex:none;font-family:var(--dsh-git-mono);font-size:11px;color:var(--dsh-git-faint)}
 .dsh-git-refs{flex:0 1 auto;min-width:0;max-width:220px;display:flex;align-items:center;gap:4px;overflow:hidden}
-.dsh-git-ref{flex:0 1 auto;min-width:0;display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:3px;font-size:10px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary);background:color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent)}
-.dsh-git-ref[data-kind="branch"]{color:var(--dsw-alias-brand-primary);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent)}
-.dsh-git-ref[data-kind="head"]{color:var(--dsw-alias-brand-primary);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent)}
-.dsh-git-ref[data-kind="tag"]{color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent)}
-.dsh-git-refMore{color:var(--dsh-git-faint);background:color-mix(in srgb, var(--dsw-alias-label-secondary) 8%, transparent)}
-.dsh-git-ref[data-current="true"]{font-weight:600;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 26%, transparent)}
+.dsh-git-ref{flex:0 1 auto;min-width:0;display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:3px;font-size:10px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary);border:.5px solid color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-label-secondary)) 55%, transparent);background:color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-label-secondary)) 22%, transparent)}
+.dsh-git-refMore{color:var(--dsh-git-faint);border-color:transparent;background:color-mix(in srgb, var(--dsw-alias-label-secondary) 8%, transparent)}
+.dsh-git-ref[data-current="true"]{font-weight:600;background:color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-brand-primary)) 38%, transparent)}
 .dsh-git-subject{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .dsh-git-author{flex:none;margin-left:-8px;padding-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--dsh-git-faint)}
 .dsh-git-time{flex:none;margin-left:-8px;padding-left:8px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--dsh-git-faint);font-variant-numeric:tabular-nums}
@@ -566,7 +565,7 @@ window.__ModuleLoader__.load({
 .dsh-git-diffHead{flex:none;display:flex;align-items:center;gap:8px;height:32px;padding:0 8px 0 12px;border-bottom:.5px solid var(--dsw-alias-border-l1)}
 .dsh-git-diffTag{flex:none;display:inline-flex;align-items:center;height:18px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsh-git-hover);color:var(--dsw-alias-label-secondary);font-size:10px;line-height:16px;white-space:nowrap}
 .dsh-git-diffPath{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--dsh-git-mono);font-size:11px;color:var(--dsw-alias-label-secondary)}
-.dsh-git-diffBody{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
+.dsh-git-diffBody{flex:1;min-height:0;overflow:auto;padding-bottom:calc(var(--dsh-composer-height, 152px) + 16px);scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
 .dsh-git-diffPre{margin:0;padding:6px 0;width:max-content;min-width:100%;font-family:var(--dsh-git-mono);font-size:12px;line-height:1.55;tab-size:4}
 .dsh-git-diffLine{display:block;padding:0 12px;white-space:pre}
 .dsh-git-lineAdd{background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent);color:var(--dsw-alias-state-success-primary)}
@@ -1039,9 +1038,11 @@ window.__ModuleLoader__.load({
      * Build the ref badges of one commit.
      * @param refs - ref values reported by the Host.
      * @param t - translate function.
+     * @param collapse - keep only the current ref (or the first) and a count of the rest.
+     * @param colorIndex - palette index of the commit's lane; the badges take its colour.
      * @returns the badge elements.
      */
-    function refBadges(refs, t, collapse = true) {
+    function refBadges(refs, t, collapse = true, colorIndex = null) {
       const normalized = []
       if (Array.isArray(refs)) {
         for (let index = 0; index < refs.length; index += 1) {
@@ -1053,12 +1054,16 @@ window.__ModuleLoader__.load({
       const shown = collapse
         ? [normalized.find((ref) => ref.current === true) || normalized[0]]
         : normalized
+      const laneTint = typeof colorIndex === 'number' && Number.isFinite(colorIndex)
+        ? laneColor(colorIndex)
+        : null
       const badges = shown.map((ref, index) => h('span', {
         key: 'ref-' + index + '-' + ref.name,
         className: 'dsh-git-ref',
         'data-kind': ref.kind,
         'data-current': ref.current ? 'true' : 'false',
         title: refKindLabel(ref.kind, t) + ': ' + ref.name,
+        style: laneTint === null ? undefined : { '--dsh-git-ref-color': laneTint },
       }, ref.name))
       const hidden = normalized.length - shown.length
       if (hidden > 0) {
@@ -1072,38 +1077,14 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Format an absolute day for a commit outside the relative window.
+     * Format a commit time with the browser's own date and time formatting.
      * @param seconds - epoch seconds.
-     * @returns the `yyyy-mm-dd` day.
+     * @returns the locale-formatted date and time, or an empty string for a missing time.
      */
-    function formatDate(seconds) {
-      const date = new Date(seconds * 1000)
-      const month = date.getMonth() + 1
-      const day = date.getDate()
-      return String(date.getFullYear())
-        + (month < 10 ? '-0' : '-') + String(month)
-        + (day < 10 ? '-0' : '-') + String(day)
-    }
-
-    /**
-     * Format a commit time relative to now.
-     * @param seconds - epoch seconds.
-     * @param t - translate function.
-     * @param nowMs - current epoch milliseconds.
-     * @returns the relative text, or an empty string for a missing time.
-     */
-    function formatCommitTime(seconds, t, nowMs) {
+    function formatCommitTime(seconds) {
       const value = Number(seconds)
       if (!Number.isFinite(value) || value <= 0) return ''
-      const delta = nowMs - value * 1000
-      if (delta < 60000) return t('time.justNow')
-      const minutes = Math.floor(delta / 60000)
-      if (minutes < 60) return t('time.minutesAgo', { count: minutes })
-      const hours = Math.floor(minutes / 60)
-      if (hours < 24) return t('time.hoursAgo', { count: hours })
-      const days = Math.floor(hours / 24)
-      if (days < 30) return t('time.daysAgo', { count: days })
-      return formatDate(value)
+      return new Date(value * 1000).toLocaleString()
     }
 
     /**
@@ -1175,11 +1156,13 @@ window.__ModuleLoader__.load({
     /**
      * Assign every commit a graph lane and the line segments its row draws.
      *
-     * A lane holds the hash of the commit its line is heading for, or null when
-     * the lane is free. A commit takes the lane that already points at it, else a
-     * free lane, else a new right-hand lane. Its first parent inherits that lane;
-     * every further parent reuses its lane when one exists and otherwise inserts
-     * a new lane directly beside the commit's own, pushing later lanes right.
+     * A lane holds the hash of the commit its line is heading for. The array is
+     * always dense, so the graph stays flush against its left edge: a lane that
+     * ends at a commit is removed and every lane to its right moves one column
+     * left within that row, drawn as an S-curve. A commit takes the lane that
+     * already points at it, else a new right-hand lane. Its first parent
+     * inherits that lane; every further parent reuses its lane when one exists
+     * and otherwise inserts a new lane directly beside the commit's own.
      *
      * Colours travel with the line, not with the lane index: `laneColors` runs
      * parallel to `lanes` and holds palette indices, so a lane shifted sideways
@@ -1188,8 +1171,8 @@ window.__ModuleLoader__.load({
      * @returns the rows with their geometry, and the widest lane count.
      */
     function buildGraph(commits) {
-      const lanes = []
-      const laneColors = []
+      let lanes = []
+      let laneColors = []
       const rows = []
       const list = Array.isArray(commits) ? commits : []
       const palette = LANE_COLORS.length
@@ -1224,87 +1207,103 @@ window.__ModuleLoader__.load({
           }
         }
 
-        let lane = lanes.indexOf(hash)
-        if (lane === -1) {
-          lane = lanes.indexOf(null)
-          if (lane === -1) {
-            lane = lanes.length
-            lanes.push(null)
-            laneColors.push(null)
-          }
-        }
         const top = lanes.slice()
         const topColors = laneColors.slice()
-        const fromTop = lane < top.length && top[lane] === hash
+        const inherited = top.indexOf(hash)
+        const lane = inherited === -1 ? top.length : inherited
+        let dotColor = topColors[lane]
+        if (typeof dotColor !== 'number') dotColor = allocateColor()
+        /** Colour a continuing lane keeps across the row. */
+        const colorOfTop = (topIndex) => (typeof topColors[topIndex] === 'number' ? topColors[topIndex] : allocateColor())
+
+        // Dense layout after this row: a lane that keeps running stays in order,
+        // a lane converging into this commit ends here, and the commit's parents
+        // take their place beside its own line. Removed lanes are not left as
+        // holes, so every continuing line that sits to their right moves left.
+        const bottom = []
+        const bottomColors = []
+        const bottomIndexOfTop = []
         const converging = []
-        for (let laneIndex = 0; laneIndex < top.length; laneIndex += 1) {
-          if (laneIndex !== lane && top[laneIndex] === hash) converging.push(laneIndex)
+        const pushLane = (value, color) => {
+          bottom.push(value)
+          bottomColors.push(color)
+          return bottom.length - 1
         }
-        for (let mergeIndex = 0; mergeIndex < converging.length; mergeIndex += 1) {
-          lanes[converging[mergeIndex]] = null
-          laneColors[converging[mergeIndex]] = null
+        let firstLane = -1
+        for (let topIndex = 0; topIndex < top.length; topIndex += 1) {
+          if (topIndex === lane) {
+            bottomIndexOfTop[topIndex] = -1
+            if (parents.length > 0) firstLane = pushLane(parents[0], dotColor)
+            continue
+          }
+          if (top[topIndex] === hash) {
+            converging.push(topIndex)
+            bottomIndexOfTop[topIndex] = -1
+            continue
+          }
+          bottomIndexOfTop[topIndex] = pushLane(top[topIndex], colorOfTop(topIndex))
         }
+        if (firstLane === -1 && parents.length > 0) firstLane = pushLane(parents[0], dotColor)
 
-        if (typeof laneColors[lane] !== 'number') laneColors[lane] = allocateColor()
-        const dotColor = laneColors[lane]
-
-        lanes[lane] = parents.length > 0 ? parents[0] : null
-        if (parents.length === 0) laneColors[lane] = null
-
-        const targets = []
-        if (parents.length > 0) targets.push({ lane, order: 0 })
+        const extraTargets = []
         let inserted = 0
         for (let parentIndex = 1; parentIndex < parents.length; parentIndex += 1) {
           const parent = parents[parentIndex]
-          const existing = lanes.indexOf(parent)
+          const existing = bottom.indexOf(parent)
           if (existing !== -1) {
-            if (typeof laneColors[existing] !== 'number') laneColors[existing] = allocateColor()
-            targets.push({ lane: existing, order: parentIndex })
+            extraTargets.push({ lane: existing, order: parentIndex })
             continue
           }
-          const at = lane + 1 + inserted
-          lanes.splice(at, 0, parent)
-          laneColors.splice(at, 0, allocateColor())
+          const at = firstLane === -1 ? bottom.length : firstLane + 1 + inserted
+          bottom.splice(at, 0, parent)
+          bottomColors.splice(at, 0, allocateColor())
+          for (let topIndex = 0; topIndex < bottomIndexOfTop.length; topIndex += 1) {
+            if (bottomIndexOfTop[topIndex] !== -1 && bottomIndexOfTop[topIndex] >= at) bottomIndexOfTop[topIndex] += 1
+          }
+          extraTargets.push({ lane: at, order: parentIndex })
           inserted += 1
-          targets.push({ lane: at, order: parentIndex })
         }
 
-        const bottom = lanes.slice()
-        const width = Math.max(top.length, bottom.length)
-        if (width > laneCount) laneCount = width
+        if (bottom.length > laneCount) laneCount = bottom.length
         const shapes = []
-        if (fromTop) shapes.push({ key: 'top', d: verticalPath(lane, 0, ROW_HEIGHT / 2), colorIndex: dotColor })
-        for (let laneIndex = 0; laneIndex < top.length; laneIndex += 1) {
-          if (top[laneIndex] === null || top[laneIndex] === undefined) continue
-          if (laneIndex === lane) continue
-          const lineColor = typeof topColors[laneIndex] === 'number' ? topColors[laneIndex] : dotColor
-          if (converging.indexOf(laneIndex) !== -1) {
-            shapes.push({ key: 'join-' + laneIndex, d: convergePath(laneIndex, lane), colorIndex: lineColor })
+        if (inherited !== -1) shapes.push({ key: 'top', d: verticalPath(lane, 0, ROW_HEIGHT / 2), colorIndex: dotColor })
+        for (let topIndex = 0; topIndex < top.length; topIndex += 1) {
+          if (topIndex === lane) continue
+          const lineColor = colorOfTop(topIndex)
+          if (top[topIndex] === hash) {
+            shapes.push({ key: 'join-' + topIndex, d: convergePath(topIndex, lane), colorIndex: lineColor })
             continue
           }
-          const to = laneIndex > lane ? laneIndex + inserted : laneIndex
+          const to = bottomIndexOfTop[topIndex]
           shapes.push({
-            key: 'lane-' + laneIndex,
-            d: to === laneIndex ? verticalPath(laneIndex, 0, ROW_HEIGHT) : shiftPath(laneIndex, to),
+            key: 'lane-' + topIndex,
+            d: to === topIndex ? verticalPath(topIndex, 0, ROW_HEIGHT) : shiftPath(topIndex, to),
             colorIndex: lineColor,
           })
         }
-        for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
-          const target = targets[targetIndex]
+        if (parents.length > 0) {
           // A second parent's edge belongs to that parent's branch line, so it
           // keeps that line's colour; only the first parent continues the dot's line.
-          const targetColor = target.lane === lane
-            ? dotColor
-            : (typeof laneColors[target.lane] === 'number' ? laneColors[target.lane] : dotColor)
           shapes.push({
-            key: 'parent-' + target.order,
-            d: target.lane === lane
-              ? verticalPath(lane, ROW_HEIGHT / 2, ROW_HEIGHT)
-              : mergePath(lane, target.lane),
-            colorIndex: targetColor,
+            key: 'parent-0',
+            d: firstLane === lane ? verticalPath(lane, ROW_HEIGHT / 2, ROW_HEIGHT) : mergePath(lane, firstLane),
+            colorIndex: dotColor,
           })
+          for (let targetIndex = 0; targetIndex < extraTargets.length; targetIndex += 1) {
+            const target = extraTargets[targetIndex]
+            const targetColor = typeof bottomColors[target.lane] === 'number' ? bottomColors[target.lane] : dotColor
+            shapes.push({ key: 'parent-' + target.order, d: mergePath(lane, target.lane), colorIndex: targetColor })
+          }
         }
-        rows.push({ commit, lane, width, shapes, dot: { x: laneX(lane), colorIndex: dotColor } })
+        rows.push({
+          commit,
+          lane,
+          width: Math.max(top.length, bottom.length),
+          shapes,
+          dot: { x: laneX(lane), colorIndex: dotColor },
+        })
+        lanes = bottom
+        laneColors = bottomColors
       }
       return { rows, laneCount }
     }
@@ -1469,15 +1468,18 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Render the repository picker: the Session working directory, the enclosing
-     * repository root, and every nested Git repository below the working
-     * directory, so subdirectories that are their own repositories stay reachable.
-     * @param options - working directory, effective repository, discovery state, copy, and callbacks.
+     * Render the cascading repository picker: the Session working directory, the
+     * enclosing repository root, and one directory level at a time. A directory
+     * probes its children only when the reader expands it, so opening the menu
+     * never scans a whole tree; a repository row selects that repository and a
+     * chevron beside it drills into its own subdirectories.
+     * @param options - working directory, effective repository, probed levels, copy, and callbacks.
      * @returns the menu element.
      */
     function renderRepoPicker(options) {
-      const { t, cwd, repository, state, onChoose, onClose } = options
-      const entry = (key, label, target, active) => h('button', {
+      const { t, cwd, repository, root, nodes, expanded, onChoose, onToggle, onRetry, onClose } = options
+
+      const headRow = (key, label, target, active) => h('button', {
         key,
         type: 'button',
         role: 'menuitem',
@@ -1493,37 +1495,80 @@ window.__ModuleLoader__.load({
       ])
 
       const headRows = []
-      if (cwd !== null) headRows.push(entry('cwd', t('picker.cwd'), cwd, repository === cwd))
-      const repoRoot = state !== null && typeof state.repoRoot === 'string' ? state.repoRoot : null
+      if (cwd !== null) headRows.push(headRow('cwd', t('picker.cwd'), cwd, repository === cwd))
+      const repoRoot = root !== null && typeof root.repoRoot === 'string' && root.repoRoot !== '' ? root.repoRoot : null
       if (repoRoot !== null && repoRoot !== cwd) {
-        headRows.push(entry('root', t('picker.root'), repoRoot, repository === repoRoot))
+        headRows.push(headRow('root', t('picker.root'), repoRoot, repository === repoRoot))
       }
 
-      const items = state !== null && Array.isArray(state.items) ? state.items : EMPTY_SUBREPOS_ITEMS
-      const subRows = items.map((item, index) => h('button', {
-        key: 'sub:' + index,
-        type: 'button',
-        role: 'menuitem',
-        className: 'dsh-git-pickerRow',
-        title: item.path,
-        onClick: () => { onChoose(item.path) },
-      }, [
-        h('span', { key: 'label', className: 'dsh-git-pickerLabel' }, item.name),
-        h('span', { key: 'path', className: 'dsh-git-pickerPath' }, item.rel !== '' ? item.rel : item.path),
-        repository === item.path
-          ? h('span', { key: 'dot', className: 'dsh-git-pickerDot', 'aria-hidden': 'true' })
-          : null,
-      ]))
-
-      const body = []
-      if (state === null || state.phase === 'idle' || state.phase === 'loading') {
-        body.push(h('p', { key: 'loading', className: 'dsh-git-pickerHint' }, t('picker.loading')))
-      } else if (state.phase === 'error') {
-        body.push(h('p', { key: 'error', className: 'dsh-git-pickerHint dsh-git-errorText' }, state.error || t('picker.error')))
-      } else if (subRows.length === 0) {
-        body.push(h('p', { key: 'empty', className: 'dsh-git-pickerHint' }, t('picker.empty')))
-      } else {
-        body.push(h('div', { key: 'list', className: 'dsh-git-pickerList', role: 'group', 'aria-label': t('picker.subrepos') }, subRows))
+      /** Rows of one probed level, including a loading, empty, or failed state. */
+      const levelRows = (path, depth) => {
+        const indent = { paddingLeft: 6 + depth * 12 }
+        const node = nodes[path]
+        if (node === undefined || node.phase === 'loading') {
+          return [h('p', { key: 'level-loading:' + path, className: 'dsh-git-pickerHintNested', style: indent }, t('picker.loading'))]
+        }
+        if (node.phase === 'error') {
+          return [h('div', { key: 'level-error:' + path, className: 'dsh-git-pickerHintNested', style: indent }, [
+            h('span', { key: 'text' }, node.error === null ? t('picker.error') : node.error),
+            h('button', {
+              key: 'retry',
+              type: 'button',
+              className: 'dsh-git-miniButton',
+              onClick: () => { onRetry(path) },
+            }, t('state.retry')),
+          ])]
+        }
+        if (node.entries.length === 0) {
+          return [h('p', { key: 'level-empty:' + path, className: 'dsh-git-pickerHintNested', style: indent }, t('picker.empty'))]
+        }
+        const rows = []
+        for (let index = 0; index < node.entries.length; index += 1) {
+          const entry = node.entries[index]
+          const open = expanded[entry.path] === true
+          const disclosureLabel = open
+            ? t('picker.collapse', { name: entry.name })
+            : t('picker.expand', { name: entry.name })
+          rows.push(h('div', { key: 'node:' + entry.path, className: 'dsh-git-pickerChildren' }, [
+            h('div', { key: 'branch', className: 'dsh-git-pickerBranch', style: indent }, [
+              h('button', {
+                key: 'disclosure',
+                type: 'button',
+                className: 'dsh-git-pickerDisclosure',
+                'data-open': open ? 'true' : 'false',
+                'data-empty': entry.hasChildren ? 'false' : 'true',
+                tabIndex: entry.hasChildren ? 0 : -1,
+                'aria-label': disclosureLabel,
+                title: disclosureLabel,
+                onClick: () => { onToggle(entry.path) },
+              }, chevronGlyph(12)),
+              h('button', {
+                key: 'row',
+                type: 'button',
+                role: 'menuitem',
+                className: 'dsh-git-pickerRow',
+                title: entry.isRepo ? t('picker.choose', { path: entry.path }) : entry.path,
+                'aria-expanded': entry.hasChildren ? (open ? 'true' : 'false') : undefined,
+                onClick: () => {
+                  if (entry.isRepo) onChoose(entry.path)
+                  else onToggle(entry.path)
+                },
+              }, [
+                h('span', { key: 'label', className: 'dsh-git-pickerLabel' }, entry.name),
+                entry.isRepo
+                  ? h('span', { key: 'path', className: 'dsh-git-pickerPath' }, t('picker.root'))
+                  : null,
+                repository === entry.path
+                  ? h('span', { key: 'dot', className: 'dsh-git-pickerDot', 'aria-hidden': 'true' })
+                  : null,
+              ]),
+            ]),
+            open
+              ? h('div', { key: 'children', className: 'dsh-git-pickerChildren' }, levelRows(entry.path, depth + 1))
+              : null,
+          ]))
+        }
+        return rows
       }
 
       return h('div', {
@@ -1544,8 +1589,10 @@ window.__ModuleLoader__.load({
           }, closeGlyph(12)),
         ]),
         h('div', { key: 'section', className: 'dsh-git-pickerSection' }, headRows),
-        h('div', { key: 'subhead', className: 'dsh-git-pickerHeading', 'data-divider': 'true' }, t('picker.subrepos')),
-        ...body,
+        h('div', { key: 'subhead', className: 'dsh-git-pickerHeading', 'data-divider': 'true' }, t('picker.children')),
+        cwd === null
+          ? null
+          : h('div', { key: 'tree', className: 'dsh-git-pickerChildren', role: 'group', 'aria-label': t('picker.children') }, levelRows(cwd, 0)),
       ])
     }
 
@@ -1657,14 +1704,14 @@ window.__ModuleLoader__.load({
      * @returns the row element.
      */
     function renderCommitRow(options) {
-      const { row, t, nowMs, graphWidth, columns, expanded, onToggle } = options
+      const { row, t, graphWidth, columns, expanded, onToggle } = options
       const commit = row.commit !== null && typeof row.commit === 'object' ? row.commit : {}
       const hash = typeof commit.hash === 'string' ? commit.hash : ''
       const short = typeof commit.short === 'string' && commit.short !== '' ? commit.short : shortOf(hash)
       const subject = typeof commit.subject === 'string' ? commit.subject : ''
       const author = typeof commit.author === 'string' ? commit.author : ''
-      const when = formatCommitTime(commit.time, t, nowMs)
-      const badges = refBadges(commit.refs, t)
+      const when = formatCommitTime(commit.time)
+      const badges = refBadges(commit.refs, t, true, row.dot.colorIndex)
       const graph = h('svg', {
         className: 'dsh-git-graphSvg',
         width: graphWidth,
@@ -1735,8 +1782,8 @@ window.__ModuleLoader__.load({
         detail,
         openFilePatch,
         t,
-        nowMs,
         graphWidth,
+        refColor,
         onCopy,
         onRetry,
         onToggleFile,
@@ -1761,7 +1808,7 @@ window.__ModuleLoader__.load({
         ]))
       } else if (detail.phase === 'ready' && detail.data !== null) {
         const data = detail.data
-        const when = formatCommitTime(data.time, t, nowMs)
+        const when = formatCommitTime(data.time)
         const parts = []
         if (data.author !== '') {
           parts.push(h('span', {
@@ -1774,7 +1821,7 @@ window.__ModuleLoader__.load({
           parts.push(h('span', {
             key: 'time',
             className: 'dsh-git-detailTime',
-            title: data.time > 0 ? formatDate(data.time) : '',
+            title: when,
           }, when))
         }
         if (data.hash !== '') {
@@ -1803,7 +1850,7 @@ window.__ModuleLoader__.load({
           }
           headChildren.push(parts[index])
         }
-        const badges = refBadges(data.refs, t, false)
+        const badges = refBadges(data.refs, t, false, refColor)
         for (let index = 0; index < badges.length; index += 1) headChildren.push(badges[index])
         headChildren.push(h('button', {
           key: 'ai',
@@ -2018,10 +2065,10 @@ window.__ModuleLoader__.load({
       })
       const [diff, setDiff] = useState(IDLE_DIFF)
       const [notice, setNotice] = useState(null)
-      const [nowMs, setNowMs] = useState(() => Date.now())
       const [repoOverride, setRepoOverride] = useState(() => (typeof initialView.repoOverride === 'string' && initialView.repoOverride.length > 0 ? initialView.repoOverride : null))
       const [pickerOpen, setPickerOpen] = useState(false)
-      const [subrepos, setSubrepos] = useState(IDLE_SUBREPOS)
+      const [browseNodes, setBrowseNodes] = useState(() => ({}))
+      const [expandedPaths, setExpandedPaths] = useState(() => ({}))
       const [columns, setColumns] = useState(readColumnWidths)
       const [columnDrag, setColumnDrag] = useState(null)
       const [splitWidth, setSplitWidth] = useState(readSplitWidth)
@@ -2044,6 +2091,7 @@ window.__ModuleLoader__.load({
       const translateRef = useRef(t)
       const cwdRef = useRef(repository)
       const pickerRef = useRef(null)
+      const pickerAbortRef = useRef(null)
       const aiRef = useRef(null)
       const bodyRef = useRef(null)
       const listRef = useRef(null)
@@ -2174,39 +2222,84 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         setRepoOverride(null)
         setPickerOpen(false)
+        setBrowseNodes({})
+        setExpandedPaths({})
       }, [cwd])
 
-      useEffect(() => {
-        if (!pickerOpen || cwd === null) return undefined
-        const controller = new AbortController()
-        setSubrepos({ phase: 'loading', items: EMPTY_SUBREPOS_ITEMS, error: null, repoRoot: null })
-        invoke('subrepos', { repo: cwd }, controller.signal).then(
+      /** Probe one directory level of the picker; the request rides the picker's abort signal. */
+      const loadPickerLevel = useCallback((path) => {
+        const controller = pickerAbortRef.current
+        const signal = controller === null ? undefined : controller.signal
+        setBrowseNodes((current) => ({
+          ...current,
+          [path]: { phase: 'loading', entries: EMPTY_BROWSE_ENTRIES, error: null, repoRoot: null, isRepo: false },
+        }))
+        invoke('browse', { dir: path }, signal).then(
           (value) => {
-            if (controller.signal.aborted) return
+            if (signal !== undefined && signal.aborted) return
             const source = value !== null && typeof value === 'object' ? value : {}
-            const items = Array.isArray(source.items)
-              ? source.items
+            const entries = Array.isArray(source.entries)
+              ? source.entries
                 .filter((item) => item !== null && typeof item === 'object' && typeof item.path === 'string' && typeof item.name === 'string')
                 .map((item) => ({
                   path: item.path,
                   name: item.name,
-                  rel: typeof item.rel === 'string' ? item.rel : '',
+                  isRepo: item.isRepo === true,
+                  hasChildren: item.hasChildren === true,
                 }))
-              : EMPTY_SUBREPOS_ITEMS
-            setSubrepos({
-              phase: 'ready',
-              items,
-              error: null,
-              repoRoot: typeof source.repoRoot === 'string' && source.repoRoot.length > 0 ? source.repoRoot : null,
-            })
+              : EMPTY_BROWSE_ENTRIES
+            setBrowseNodes((current) => ({
+              ...current,
+              [path]: {
+                phase: 'ready',
+                entries,
+                error: null,
+                repoRoot: typeof source.repoRoot === 'string' && source.repoRoot.length > 0 ? source.repoRoot : null,
+                isRepo: source.isRepo === true,
+              },
+            }))
           },
           (failure) => {
-            if (controller.signal.aborted || isAbort(failure)) return
-            setSubrepos({ phase: 'error', items: EMPTY_SUBREPOS_ITEMS, error: messageOf(failure, translateRef.current), repoRoot: null })
+            if ((signal !== undefined && signal.aborted) || isAbort(failure)) return
+            setBrowseNodes((current) => ({
+              ...current,
+              [path]: {
+                phase: 'error',
+                entries: EMPTY_BROWSE_ENTRIES,
+                error: messageOf(failure, translateRef.current),
+                repoRoot: null,
+                isRepo: false,
+              },
+            }))
           },
         )
-        return () => { controller.abort() }
-      }, [pickerOpen, cwd, invoke])
+      }, [invoke])
+
+      useEffect(() => {
+        if (!pickerOpen || cwd === null) return undefined
+        const controller = new AbortController()
+        pickerAbortRef.current = controller
+        setBrowseNodes({})
+        setExpandedPaths({})
+        loadPickerLevel(cwd)
+        return () => {
+          controller.abort()
+          if (pickerAbortRef.current === controller) pickerAbortRef.current = null
+        }
+      }, [pickerOpen, cwd, loadPickerLevel])
+
+      /** Expand or collapse one directory row; the first expansion probes that level. */
+      const togglePickerPath = useCallback((path) => {
+        const open = expandedPaths[path] === true
+        setExpandedPaths((current) => {
+          const next = { ...current }
+          if (open) delete next[path]
+          else next[path] = true
+          return next
+        })
+        const node = browseNodes[path]
+        if (!open && (node === undefined || node.phase === 'error')) loadPickerLevel(path)
+      }, [browseNodes, expandedPaths, loadPickerLevel])
 
       useEffect(() => {
         if (!pickerOpen) return undefined
@@ -2253,11 +2346,6 @@ window.__ModuleLoader__.load({
         return () => { clearTimeout(timer) }
       }, [notice])
 
-      useEffect(() => {
-        const timer = setInterval(() => { setNowMs(Date.now()) }, CLOCK_MS)
-        return () => { clearInterval(timer) }
-      }, [])
-
       useEffect(() => () => {
         if (loadAbortRef.current !== null) loadAbortRef.current.abort()
         if (logAbortRef.current !== null) logAbortRef.current.abort()
@@ -2265,6 +2353,7 @@ window.__ModuleLoader__.load({
         if (refreshAbortRef.current !== null) refreshAbortRef.current.abort()
         if (detailAbortRef.current !== null) detailAbortRef.current.abort()
         if (patchAbortRef.current !== null) patchAbortRef.current.abort()
+        if (pickerAbortRef.current !== null) pickerAbortRef.current.abort()
       }, [])
 
       useEffect(() => {
@@ -2979,11 +3068,15 @@ window.__ModuleLoader__.load({
               t,
               cwd,
               repository,
-              state: subrepos,
+              root: cwd === null ? null : (browseNodes[cwd] === undefined ? null : browseNodes[cwd]),
+              nodes: browseNodes,
+              expanded: expandedPaths,
               onChoose: (next) => {
                 setRepoOverride(next)
                 setPickerOpen(false)
               },
+              onToggle: (path) => { togglePickerPath(path) },
+              onRetry: (path) => { loadPickerLevel(path) },
               onClose: () => { setPickerOpen(false) },
             })
             : null,
@@ -3377,7 +3470,6 @@ window.__ModuleLoader__.load({
             renderCommitRow({
               row,
               t,
-              nowMs,
               graphWidth,
               columns,
               expanded,
@@ -3388,8 +3480,8 @@ window.__ModuleLoader__.load({
                 detail,
                 openFilePatch,
                 t,
-                nowMs,
                 graphWidth,
+                refColor: row.dot.colorIndex,
                 onCopy: (value) => { void copyHash(value) },
                 onRetry: retryCommitDetail,
                 onToggleFile: toggleCommitFile,
@@ -3517,6 +3609,10 @@ window.__ModuleLoader__.load({
       return h('section', {
         className: 'dsh-git-view',
         'aria-label': t('view.label'),
+        // Asks the conversation shell to float the composer over this view and
+        // to drop the column's width handles, exactly like the built-in
+        // Trajectory tab (see ui-conversation's `:has()` rules).
+        'data-conversation-composer-overlay': '',
         'data-resizing': resizing ? 'true' : 'false',
       }, [
         h('style', { key: 'style' }, CSS),

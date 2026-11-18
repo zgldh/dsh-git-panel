@@ -3,8 +3,9 @@
  *
  * The plugin owns one authenticated POST route (`/api/git-ui`) that the Client
  * half calls for repository status, diffs, staging, commits, branch history,
- * and branch switching. The route belongs to the shared Connection channel, so
- * only an authenticated owner peer (the page's browser session) reaches it.
+ * branch switching, and cascading directory browsing for the repository picker.
+ * The route belongs to the shared Connection channel, so only an authenticated
+ * owner peer (the page's browser session) reaches it.
  *
  * The Client half is a Session view: it passes the Session's working directory
  * as `repo`. The service resolves that path to the enclosing Git repository
@@ -29,7 +30,7 @@ export const inject = ['connection']
 /** Absolute route the Client half posts to, below the shared `/api` channel. */
 const ROUTE_PATH = '/api/git-ui'
 
-/** Directory names the sub-repository discovery never descends into; lowercase. */
+/** Directory names the cascading repository browse never lists or enters; lowercase. */
 const DEFAULT_SKIP_DIRECTORIES = [
   'node_modules',
   'dist',
@@ -58,8 +59,7 @@ const DEFAULT_CONFIG = {
   signCommits: false,
   includeAllRefs: false,
   allowRoots: [],
-  subrepoDepth: 3,
-  subrepoLimit: 50,
+  browseLimit: 200,
   skipDirectories: DEFAULT_SKIP_DIRECTORIES,
 }
 
@@ -116,8 +116,7 @@ export function normalizeConfig(input) {
     commitFilesLimit: readConfigField(source, 'commitFilesLimit', DEFAULT_CONFIG.commitFilesLimit, isInteger(50, 5000), 'an integer between 50 and 5000'),
     signCommits: readConfigField(source, 'signCommits', DEFAULT_CONFIG.signCommits, (value) => typeof value === 'boolean', 'a boolean'),
     includeAllRefs: readConfigField(source, 'includeAllRefs', DEFAULT_CONFIG.includeAllRefs, (value) => typeof value === 'boolean', 'a boolean'),
-    subrepoDepth: readConfigField(source, 'subrepoDepth', DEFAULT_CONFIG.subrepoDepth, isInteger(1, 8), 'an integer between 1 and 8'),
-    subrepoLimit: readConfigField(source, 'subrepoLimit', DEFAULT_CONFIG.subrepoLimit, isInteger(1, 300), 'an integer between 1 and 300'),
+    browseLimit: readConfigField(source, 'browseLimit', DEFAULT_CONFIG.browseLimit, isInteger(1, 10000), 'an integer between 1 and 10000'),
     skipDirectories: Object.freeze(skipDirectories.map((entry) => entry.toLowerCase())),
     allowRoots: Object.freeze(allowRoots.map((entry) => path.resolve(entry))),
   })
@@ -554,59 +553,71 @@ export async function readCommitDiff(repo, hash, filePath, config) {
 }
 
 /**
- * Discover Git repositories below one directory, for the repository picker.
+ * Browse one directory one level deep, for the cascading repository picker.
  *
- * The base directory itself is not listed: it is the Session working directory
- * whose own repository the view shows by default. A nested repository is any
- * directory below the base that contains a `.git` entry (a directory or a
- * worktree file). Build and dependency directories are skipped, and both depth
- * and result count are bounded by configuration.
- * @param base - absolute existing directory to scan.
+ * The picker asks for one level at a time: expanding a directory sends another
+ * browse request naming that directory, so a workspace holding dozens of nested
+ * repositories is never walked at once. Only direct subdirectories are
+ * reported. A subdirectory is listed when it is itself a repository (it holds a
+ * `.git` entry, either a directory or a worktree file) or when it holds at least
+ * one subdirectory that can be descended into; a plain leaf directory is a dead
+ * end for the picker and is left out. Each subdirectory needs a single
+ * `readdir` to answer both flags, never a recursive walk. Hidden directories and
+ * the configured build/dependency directories are skipped, and the result count
+ * stops at `config.browseLimit`.
+ * @param base - absolute existing directory to read; it need not be a repository.
  * @param config - resolved configuration.
- * @returns the base directory, the enclosing repository root (or null), and the
- *   nested repositories with their base-relative paths.
+ * @returns the browsed directory, the enclosing repository root (or null when the
+ *   directory is outside every repository), whether the directory itself holds a
+ *   `.git` entry, its listed direct subdirectories, and whether the list stopped
+ *   at the configured limit.
  */
-export async function discoverSubrepositories(base, config) {
-  const root = path.resolve(base)
-  const topLevel = await runGit(root, ['rev-parse', '--show-toplevel'], { timeout: config.gitTimeoutMs })
+export async function browseDirectory(base, config) {
+  const dir = path.resolve(base)
+  const topLevel = await runGit(dir, ['rev-parse', '--show-toplevel'], { timeout: config.gitTimeoutMs })
   const reported = trimLine(topLevel.stdout).trim()
   const repoRoot = topLevel.code === 0 && reported.length > 0 ? path.resolve(reported) : null
 
-  const items = []
-  const queue = [{ dir: root, depth: 0 }]
+  let children
+  try {
+    children = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    // An unreadable directory still answers the enclosing repository question.
+    children = []
+  }
+  const isRepo = children.some((child) => child.name === '.git')
+  const candidates = children
+    .filter((child) => child.isDirectory())
+    .filter((child) => !child.name.startsWith('.'))
+    .filter((child) => !config.skipDirectories.includes(child.name.toLowerCase()))
+    .sort((left, right) => left.name.localeCompare(right.name))
+
+  const entries = []
   let truncated = false
-  while (queue.length > 0) {
-    if (items.length >= config.subrepoLimit) {
+  for (const child of candidates) {
+    if (entries.length >= config.browseLimit) {
       truncated = true
       break
     }
-    const current = queue.shift()
-    let entries
+    const childPath = path.join(dir, child.name)
+    let grandchildren
     try {
-      entries = await fs.readdir(current.dir, { withFileTypes: true })
+      grandchildren = await fs.readdir(childPath, { withFileTypes: true })
     } catch {
       continue
     }
-    const hasGitEntry = entries.some((entry) => entry.name === '.git')
-    if (hasGitEntry && current.depth > 0) {
-      const relative = path.relative(root, current.dir)
-      items.push({
-        path: current.dir,
-        name: path.basename(current.dir) || current.dir,
-        rel: relative.split(path.sep).join('/'),
-      })
-    }
-    if (current.depth >= config.subrepoDepth) continue
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      if (entry.name.startsWith('.')) continue
-      if (config.skipDirectories.includes(entry.name.toLowerCase())) continue
-      queue.push({ dir: path.join(current.dir, entry.name), depth: current.depth + 1 })
-    }
+    const childIsRepo = grandchildren.some((entry) => entry.name === '.git')
+    const hasChildren = grandchildren.some(
+      (entry) =>
+        entry.isDirectory() &&
+        !entry.name.startsWith('.') &&
+        !config.skipDirectories.includes(entry.name.toLowerCase()),
+    )
+    if (!childIsRepo && !hasChildren) continue
+    entries.push({ name: child.name, path: childPath, isRepo: childIsRepo, hasChildren })
   }
 
-  items.sort((left, right) => left.path.localeCompare(right.path))
-  return { base: root, repoRoot, items, truncated }
+  return { dir, repoRoot, isRepo, entries, truncated }
 }
 
 /**
@@ -695,6 +706,30 @@ function normalizeFileList(value) {
 }
 
 /**
+ * Resolve one directory request field to an absolute path and stat it.
+ *
+ * Both the repository operations and the cascading browse read a directory from
+ * the request body, so the shape checks live here once.
+ * @param value - request field carrying a directory path.
+ * @param field - name of the request field, used in error messages.
+ * @returns the resolved absolute path and its stat result.
+ * @throws when the value is not a non-empty string, contains a NUL byte, or names
+ *   nothing on disk.
+ */
+async function resolveExistingPath(value, field) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new RequestError('bad_request', `\`${field}\` must be a non-empty path.`)
+  }
+  if (value.includes('\0')) throw new RequestError('bad_request', `\`${field}\` contains a NUL byte.`)
+  const candidate = path.resolve(value.trim())
+  try {
+    return { candidate, stat: await fs.stat(candidate) }
+  } catch {
+    throw new RequestError('not_found', `目录不存在：${candidate}`)
+  }
+}
+
+/**
  * Build the request-serving service for one resolved configuration.
  * @param configInput - raw row config.
  * @returns the service with one request handler and direct operations.
@@ -708,17 +743,7 @@ export function createGitService(configInput) {
    * @returns the repository root reported by `git rev-parse --show-toplevel`.
    */
   async function requireRepository(value) {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-      throw new RequestError('bad_request', '`repo` must be a non-empty path.')
-    }
-    if (value.includes('\0')) throw new RequestError('bad_request', '`repo` contains a NUL byte.')
-    const candidate = path.resolve(value.trim())
-    let stat
-    try {
-      stat = await fs.stat(candidate)
-    } catch {
-      throw new RequestError('not_found', `目录不存在：${candidate}`)
-    }
+    const { candidate, stat } = await resolveExistingPath(value, 'repo')
     if (!stat.isDirectory()) throw new RequestError('not_a_repository', `不是 Git 仓库：${candidate}`)
     const topLevel = await runGit(candidate, ['rev-parse', '--show-toplevel'], { timeout: config.gitTimeoutMs })
     const reported = trimLine(topLevel.stdout).trim()
@@ -733,27 +758,30 @@ export function createGitService(configInput) {
   }
 
   /**
-   * List nested Git repositories below one existing directory.
-   * @param value - absolute directory from the request; it need not be a repository.
-   * @returns the discovery result for the repository picker.
+   * Validate one directory from a request and resolve it to an absolute path.
+   *
+   * Unlike {@link requireRepository} the directory need not be a repository: the
+   * picker also browses plain parents that only hold repositories.
+   * @param value - absolute directory from the request.
+   * @returns the resolved absolute path.
+   * @throws when the value is malformed, missing, not a directory, or fenced by `allowRoots`.
    */
-  async function listSubrepositories(value) {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-      throw new RequestError('bad_request', '`repo` must be a non-empty path.')
-    }
-    if (value.includes('\0')) throw new RequestError('bad_request', '`repo` contains a NUL byte.')
-    const candidate = path.resolve(value.trim())
-    let stat
-    try {
-      stat = await fs.stat(candidate)
-    } catch {
-      throw new RequestError('not_found', `目录不存在：${candidate}`)
-    }
+  async function requireDirectory(value) {
+    const { candidate, stat } = await resolveExistingPath(value, 'dir')
     if (!stat.isDirectory()) throw new RequestError('not_found', `不是目录：${candidate}`)
     if (config.allowRoots.length > 0 && !config.allowRoots.some((allowed) => isWithin(allowed, candidate))) {
       throw new RequestError('forbidden', `Directory is outside allowRoots: ${candidate}`)
     }
-    return await discoverSubrepositories(candidate, config)
+    return candidate
+  }
+
+  /**
+   * Browse one directory one level deep for the cascading repository picker.
+   * @param value - absolute directory from the request; it need not be a repository.
+   * @returns the direct subdirectories with their repository and drill-down flags.
+   */
+  async function browse(value) {
+    return await browseDirectory(await requireDirectory(value), config)
   }
 
   /**
@@ -892,8 +920,8 @@ export function createGitService(configInput) {
         return await readBranches(await requireRepository(payload.repo), config)
       case 'switch':
         return await switchBranch(payload.repo, payload.branch)
-      case 'subrepos':
-        return await listSubrepositories(payload.repo)
+      case 'browse':
+        return await browse(payload.dir)
       case 'commitDetail':
         return await readCommitDetail(await requireRepository(payload.repo), payload.hash, config)
       case 'commitDiff':
@@ -949,7 +977,7 @@ export function createGitService(configInput) {
     log: async (repo, limit) => await readLog(await requireRepository(repo), limit, config),
     branches: async (repo) => await readBranches(await requireRepository(repo), config),
     switchBranch,
-    subrepos: listSubrepositories,
+    browse,
     commitDetail: async (repo, hash) => await readCommitDetail(await requireRepository(repo), hash, config),
     commitDiff: async (repo, hash, filePath) =>
       await readCommitDiff(await requireRepository(repo), hash, normalizeFileArgument(filePath), config),
