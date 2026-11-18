@@ -18,6 +18,16 @@ A VS Code-style Git view for the [DeepSeek Harness](https://github.com/deepseek-
 - **AI prompts, not AI writes** — toolbar **AI** menu (merge branches, review current changes, explain the current branch), a review shortcut beside the source-control title, and **Explain this commit** in the commit detail. Each one generates an editable prompt and writes it into the composer with `inputActions.setDraft`; you press Enter to send. Prompts carry only the repository path, involved branches, and your stated purpose — the agent inspects the repository with its own tools.
 - **Bilingual UI** (Chinese/English) and a light/dark theme that follows the host.
 
+## Screenshots
+
+![Commit graph with an expanded commit detail](screenshots/overview-dark.png)
+
+*The commit graph: fixed lanes, lane-coloured ref chips, a merge history, and an expanded commit detail.*
+
+![Commit-file diff in the right Sidebar](screenshots/diff-split-dark.png)
+
+*Commit-file diff in the right Sidebar: side-by-side view, syntax highlighting, and the layout/wrap/open-file controls.*
+
 ## Install
 
 The bundle requires a DeepSeek Harness **Web** profile and `dsh >= 0.2.1-rc.3 < 0.3.0` (`engines.dsh` in `package.json`).
@@ -127,6 +137,16 @@ DeepSeek Harness（DSH）Web GUI 的 VS Code 风格 Git 视图。它作为会话
 - **状态记忆**：切到「对话」再切回 Git，会恢复所选仓库、提交草稿、当前标签和选中文件、展开的提交，以及滚动位置（按会话、按浏览器标签页）。
 - **AI 只生成 prompt，不代替你操作**：工具栏「AI」菜单（合并分支、评审当前改动、解释当前分支）、源代码管理标题旁的评审按钮、提交详情里的「让 AI 解释这次提交」。生成可编辑的 prompt 并通过 `inputActions.setDraft` 填入输入框，由你按 Enter 发送；prompt 只给仓库路径、涉及分支和你的目的，让 AI 自己用工具查看仓库。
 - 中英双语界面，深浅色主题跟随宿主。
+
+### 截图
+
+![带展开提交详情的提交图](screenshots/overview-dark.png)
+
+*提交图：固定泳道、按泳道着色的分支标签、包含合并的历史，以及展开的提交详情。*
+
+![右侧栏里的提交文件 diff](screenshots/diff-split-dark.png)
+
+*右侧栏里的提交文件 diff：左右对比、语法高亮，以及布局/换行/打开整个文件的按钮。*
 
 ### 安装
 
