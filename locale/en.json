@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Git Panel",
-    "description": "Session Git view: inspect changes in the working directory's repository, stage and commit, browse the commit graph and file diffs, and switch branches."
+    "description": "VSCode-style Git view for every Session: source control (stage, commit, diff), a branch-lane commit graph with inline commit details, and AI prompts for merge and review — for the Session working directory and nested repositories."
   }
 }
