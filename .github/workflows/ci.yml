@@ -9,7 +9,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # The market-index check pins the commit that last changed the package
+      # payload, so it needs the real history: in a shallow checkout the
+      # boundary commit is treated as a root commit that "added" every file and
+      # the computed pin never matches the committed index.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
