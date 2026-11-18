@@ -579,7 +579,7 @@ window.__ModuleLoader__.load({
 .dsh-git-subject{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .dsh-git-author{flex:none;margin-left:-8px;padding-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--dsh-git-faint)}
 .dsh-git-time{flex:none;margin-left:-8px;padding-left:8px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--dsh-git-faint);font-variant-numeric:tabular-nums}
-.dsh-git-detail{display:flex;flex-direction:column;gap:6px;margin:0 12px 0 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1)}
+.dsh-git-detail{display:flex;flex-direction:column;gap:6px;margin:0 12px 0 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1);border-top:0;border-radius:0 0 var(--dsw-radius-sm) var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1)}
 .dsh-git-detailRow{display:flex;align-items:stretch;min-width:0;margin-bottom:6px;position:relative}
 .dsh-git-detailGraph{flex:none;margin-left:2px;position:relative;align-self:stretch}
 .dsh-git-detailLane{position:absolute;top:0;bottom:-6px;width:1.5px;pointer-events:none}
