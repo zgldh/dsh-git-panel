@@ -60,6 +60,8 @@ window.__ModuleLoader__.load({
       'review.wrap': '开启自动换行',
       'review.nowrap': '关闭自动换行',
       'review.wrapAria': '自动换行',
+      'review.openFile': '在侧边栏打开整个文件',
+      'review.openFileAria': '在侧边栏打开 {name}',
       'commitDiff.title': '提交文件变更',
       'commitDiff.missing': '缺少打开这个 diff 的参数。',
       'commitDiff.stale': '这个标签页由旧版本打开，请从提交详情里重新点击文件。',
@@ -204,6 +206,8 @@ window.__ModuleLoader__.load({
       'review.wrap': 'Enable line wrap',
       'review.nowrap': 'Disable line wrap',
       'review.wrapAria': 'Line wrap',
+      'review.openFile': 'Open the whole file in the sidebar',
+      'review.openFileAria': 'Open {name} in sidebar',
       'commitDiff.title': 'Commit file changes',
       'commitDiff.missing': 'Missing parameters for this diff.',
       'commitDiff.stale': 'This tab was opened by an older version; click the file in the commit detail again.',
@@ -2058,6 +2062,34 @@ window.__ModuleLoader__.load({
       return 'dsh-resource://git-commit-diff/' + encodeURIComponent(repo) + '/' + encodeURIComponent(hash) + '/' + segments.join('/')
     }
 
+    /** Address prefix of the built-in file reader. */
+    const FILE_ADDRESS_PREFIX = 'dsh-resource://file/'
+
+    /**
+     * Build the address of one whole file read through a Session, the way the
+     * Harness review tab addresses its "open the whole file" action.
+     * @param sessionId - the Session whose Host workspace resolves the path.
+     * @param path - absolute file path.
+     * @returns the `dsh-resource://file/session/…` address.
+     */
+    function fileAddressFor(sessionId, path) {
+      const encodeSegment = (segment) => encodeURIComponent(segment).replace(/%3A/gi, ':')
+      const normalized = String(path).replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
+      return FILE_ADDRESS_PREFIX + 'session/' + encodeSegment(sessionId) + '/' + normalized.split('/').map(encodeSegment).join('/')
+    }
+
+    /**
+     * Absolute path of one file inside a repository.
+     * @param repo - absolute repository path.
+     * @param path - repository-relative file path.
+     * @returns the absolute path with forward slashes.
+     */
+    function commitAbsolutePath(repo, path) {
+      const root = String(repo).replace(/\\/g, '/').replace(/\/+$/, '')
+      const relative = String(path).replace(/\\/g, '/').replace(/^\/+/, '')
+      return root + '/' + relative
+    }
+
     /**
      * Read the target back out of a commit-file diff address.
      * @param address - the tab's address.
@@ -2105,6 +2137,9 @@ window.__ModuleLoader__.load({
         path: target.path,
         recognized: target.recognized,
         revision,
+        actions: tab !== null && tab !== undefined && typeof tab === 'object' && tab.actions !== null && typeof tab.actions === 'object'
+          ? tab.actions
+          : null,
       }
     }
 
@@ -2516,15 +2551,16 @@ window.__ModuleLoader__.load({
     /**
      * Right-Sidebar tab body showing one commit file's diff.
      *
-     * It is a page type of its own, so opening another file navigates this tab
-     * instead of stacking duplicates. Layout, controls, line numbering, colours
-     * and syntax highlighting follow the Harness review tab: single column or
-     * side by side, with an optional line wrap.
-     * @param props - locale copy, the injected diff loader, and the tab information hook.
+     * It is a resource type of its own: the address names the repository, commit,
+     * and file, so another file opens its own tab and a reload restores the tab.
+     * Layout, controls, line numbering, colours and syntax highlighting follow the
+     * Harness review tab: single column or side by side, with an optional line wrap.
+     * @param props - locale copy, the injected diff loader and Session id, and the tab information hook.
      * @returns the tab body.
      */
     function CommitDiffTab(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackTranslate
+      const sessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
       const target = readCommitDiffTarget(props.useTabInfo)
       const loadDiffRef = useRef(props.loadCommitDiff)
       loadDiffRef.current = props.loadCommitDiff
@@ -2588,6 +2624,16 @@ window.__ModuleLoader__.load({
         return { add, del }
       }, [parsed])
 
+      const fileName = splitPath(target.path).name
+
+      /** Open the whole file in the Sidebar's built-in text preview, like the review tab does. */
+      const openWholeFile = () => {
+        if (sessionId === '' || target.repo === '' || target.path === '') return
+        const actions = target.actions
+        if (actions === null || typeof actions.openResource !== 'function') return
+        actions.openResource(fileAddressFor(sessionId, commitAbsolutePath(target.repo, target.path)))
+      }
+
       const tools = [
         h(primitives.Tooltip, {
           key: 'split',
@@ -2615,6 +2661,18 @@ window.__ModuleLoader__.load({
           'data-review-tool': 'wrap',
           onClick: () => { togglePref('wrap') },
         }, prefs.wrap ? h(primitives.IconNowrapFillRegular, {}) : h(primitives.IconWrapFillRegular, {}))),
+        h(primitives.Tooltip, {
+          key: 'open-file',
+          label: t('review.openFile'),
+          side: 'bottom',
+          delayMs: 500,
+        }, h('button', {
+          type: 'button',
+          className: 'dsh-git-sidebarTabTool',
+          'aria-label': t('review.openFileAria', { name: fileName === '' ? target.path : fileName }),
+          'data-review-tool': 'open-file',
+          onClick: openWholeFile,
+        }, h(primitives.IconInspectOutlineRegular, {}))),
       ]
 
       const children = [
@@ -4499,7 +4557,7 @@ window.__ModuleLoader__.load({
           name: 'sidebar.right.pane.tab',
           key: COMMIT_DIFF_TAB_ID,
           locale: 'git.view',
-          inject: () => ({ loadCommitDiff }),
+          inject: (sessionId) => ({ loadCommitDiff, sessionId }),
         }, CommitDiffTab)), 'git-panel: commit diff tab body')
         ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
           name: 'sidebar.right.pane.tab.title',
