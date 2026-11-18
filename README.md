@@ -85,6 +85,15 @@ Edit the `git-panel` row in your profile patch (or the bundle's `cordis.patch.ym
 - Column/split widths and the diff layout choice are stored in `localStorage`; view memory is per Session in `sessionStorage` (per browser tab).
 - AI prompts are fill-only: the plugin never sends the message and never triggers a Git write operation. Commit-message generation is not implemented yet.
 
+## Reading the graph
+
+- A lane keeps its column for its whole life; a continuing branch line is always a straight vertical segment.
+- A merge or a join is drawn as a short diagonal from the commit dot to the column it links to. The corner of the graph is not a change of branch.
+- A newly started branch takes the leftmost free column, or a new right-hand column when every column is busy.
+- A branch or tag chip uses the colour of the commit's lane, so a label can be matched to its line at a glance.
+- The first parent of a merge keeps the merge commit's own lane and colour; a second parent starts or joins a differently coloured line.
+- Scrolling the list to the bottom loads the next page of older commits; the header shows how many are loaded so far.
+
 ## Development
 
 ```sh
@@ -181,6 +190,15 @@ dsh plugin --profile web add link:/path/to/dsh-git-panel
 - 提交文件 diff 依赖 Harness 的右侧边栏（`dsh >= 0.2.1-rc.3` 自带）；右侧栏不可用时退回行内 patch。
 - 列宽/分栏宽度存在 `localStorage`（全局）；diff 布局选择和视图状态也存在 `localStorage`/`sessionStorage`。
 - AI 只到「填 prompt」为止：不自动发送、不触发任何 Git 写操作；暂未实现「生成提交信息」。
+
+### 看懂提交图
+
+- 一条泳道在自己的生命周期内固定占用同一列，延续的分支线永远是竖直的。
+- 合并或汇入画成从提交圆点连到目标列的短斜线，斜线不是换分支。
+- 新开的分支优先占用最左边的空列；所有列都在用时才在最右侧新开一列。
+- 分支名/标签名的底色取自该提交所在泳道的颜色，扫一眼就能对应到线。
+- 合并提交的第一父继承合并提交自己的泳道和颜色，第二父另外起（或汇入）一条不同颜色的线。
+- 列表滚动到底部会自动加载下一页更早的提交，顶部显示已加载的提交数。
 
 ### 开发与许可
 
