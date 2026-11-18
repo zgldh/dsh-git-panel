@@ -1,0 +1,10 @@
+# Git panel bundle: one Host row that owns the `/api/git-ui` route, plus one
+# Web Client module in the same package. The Client half is a Session view, so
+# it reads the Session's working directory; this row therefore needs no
+# directory list. `allowRoots` is an optional safety fence: when empty (the
+# default) any existing directory may be passed as `repo`.
+- insert:
+    - id: git-panel
+      name: 'dsh-git-panel'
+      config:
+        logLimit: 80

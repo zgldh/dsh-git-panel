@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git Panel",
+    "description": "Session Git view: inspect changes in the working directory's repository, stage and commit, browse the commit graph and file diffs, and switch branches."
+  }
+}

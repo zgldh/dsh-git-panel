@@ -1,0 +1,65 @@
+{
+  "name": "dsh-git-panel",
+  "version": "1.0.0",
+  "description": "VSCode-style Git view for the DeepSeek Harness Web GUI: source control (stage, commit, diff), a branch-lane commit graph with inline commit details, and AI prompts for merge/review — for every Session's working directory, including nested repositories.",
+  "license": "MIT",
+  "author": {
+    "name": "zgldh"
+  },
+  "type": "module",
+  "homepage": "https://github.com/zgldh/dsh-git-panel#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zgldh/dsh-git-panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zgldh/dsh-git-panel/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "git",
+    "git-graph",
+    "source-control",
+    "vscode"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.3 <0.3.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/git-core.test.mjs && node test/check-bundle.mjs",
+    "market:build": "node scripts/build-index.mjs",
+    "market:check": "node scripts/build-index.mjs --check"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  }
+}

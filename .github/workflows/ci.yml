@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Host and bundle checks
+        run: npm test
+      - name: Market index is current
+        run: |
+          npm install --no-save --no-package-lock @deepseek-ai/dsh-plugin-market-index@0.2.1-rc.3
+          node scripts/build-index.mjs --check
