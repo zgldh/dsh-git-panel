@@ -57,7 +57,7 @@
           "source": {
             "type": "git",
             "url": "https://github.com/zgldh/dsh-git-panel",
-            "commit": "8c10facec344da2890ce939eaa624334bff20adf"
+            "commit": "be6ba7eeccb8639fa3fee191ad617d194549fb94"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.3 <0.3.0"
