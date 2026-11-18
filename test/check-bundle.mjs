@@ -100,6 +100,7 @@ await test('the Client module has no ESM syntax and requires only react', () => 
   console.log(`  requires: ${[...new Set(requires)].join(', ')}`)
   for (const request of requires) assert.equal(request, 'react', `unexpected require: ${request}`)
   assert.match(source, /__ModuleLoader__\.load\(/)
+  assert.ok(source.includes(`id: '${manifest.name}'`), 'the Client module id must equal the package name the Host loads')
   assert.match(source, /inject: \['slots', 'locale'\]|inject: \["slots", "locale"\]/)
 })
 

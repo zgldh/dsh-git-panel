@@ -13,7 +13,7 @@
  * `git -C <repo>`: no shell, and only absolute existing directories are
  * accepted.
  *
- * @module @local/dsh-git-panel
+ * @module dsh-git-panel
  */
 
 import { execFile } from 'node:child_process'
