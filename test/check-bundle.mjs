@@ -92,24 +92,29 @@ await test('the Client module parses as a plain script', () => {
   execFileSync(process.execPath, ['--check', path.join(root, 'client.js')], { stdio: 'pipe' })
 })
 
-await test('the Client module has no ESM syntax and requires only react', () => {
+await test('the Client module has no ESM syntax and requires only the shared runtime packages', () => {
   const source = readFileSync(path.join(root, 'client.js'), 'utf8')
   assert.doesNotMatch(source, /^\s*import\s/m)
   assert.doesNotMatch(source, /^\s*export\s/m)
   const requires = [...source.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)].map((match) => match[1])
   console.log(`  requires: ${[...new Set(requires)].join(', ')}`)
-  for (const request of requires) assert.equal(request, 'react', `unexpected require: ${request}`)
+  const allowed = new Set(['react', '@deepseek-ai/dsh-client-ui-primitives'])
+  for (const request of requires) assert.ok(allowed.has(request), `unexpected require: ${request}`)
   assert.match(source, /__ModuleLoader__\.load\(/)
   assert.ok(source.includes(`id: '${manifest.name}'`), 'the Client module id must equal the package name the Host loads')
-  assert.match(source, /inject: \['slots', 'locale'\]|inject: \["slots", "locale"\]/)
+  assert.match(source, /inject: \['slots', 'locale', 'sidebarRight', 'sidebarRightTabs'\]/)
 })
 
-await test('the Client module registers the Session Git view only', () => {
+await test('the Client module registers the Git view and its commit-diff Sidebar tab', () => {
   const source = readFileSync(path.join(root, 'client.js'), 'utf8')
   assert.match(source, /conversation\.view/)
   assert.match(source, /id: 'git'|id: "git"/)
   assert.match(source, /order: 20/)
   assert.match(source, /git\.view/)
+  assert.match(source, /sidebar\.right\.pane\.tab/)
+  assert.match(source, /git-commit-diff/)
+  assert.match(source, /sidebarRightTabs\.register/)
+  assert.match(source, /ctx\.sidebarRight\.openTab/)
   assert.doesNotMatch(source, /sidebar\.panellist/, 'the Git view must not register a sidebar panel icon')
   assert.doesNotMatch(source, /name: 'main',\s*\n?\s*key:/, 'the Git view must not register a main panel')
   assert.match(source, /api\/git-ui/)

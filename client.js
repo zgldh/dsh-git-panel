@@ -2,6 +2,7 @@ window.__ModuleLoader__.load({
   id: 'dsh-git-panel',
   factory(require) {
     const React = require('react')
+    const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
@@ -46,6 +47,19 @@ window.__ModuleLoader__.load({
       'diff.empty': '这个文件没有可显示的 diff。',
       'diff.untrackedEmpty': '未跟踪文件，暂无 diff。',
       'diff.truncated': '已截断',
+      'diff.truncatedLines': '只显示前 {count} 行',
+      'diff.binary': '二进制文件，无法显示改动',
+      'diff.created': '新建的文件',
+      'diff.deleted': '删除的文件',
+      'diff.unchanged': '两侧内容相同',
+      'review.split': '切换为左右对比',
+      'review.unified': '切换为单栏对比',
+      'review.splitAria': '左右对比',
+      'review.wrap': '开启自动换行',
+      'review.nowrap': '关闭自动换行',
+      'review.wrapAria': '自动换行',
+      'commitDiff.title': '提交文件变更',
+      'commitDiff.missing': '缺少打开这个 diff 的参数。',
 
       'toolbar.refresh': '刷新',
       'toolbar.busy': '正在更新…',
@@ -174,6 +188,19 @@ window.__ModuleLoader__.load({
       'diff.empty': 'No diff to show for this file.',
       'diff.untrackedEmpty': 'Untracked file: no diff yet.',
       'diff.truncated': 'Truncated',
+      'diff.truncatedLines': 'Showing the first {count} lines',
+      'diff.binary': 'Binary file; changes cannot be shown',
+      'diff.created': 'Created file',
+      'diff.deleted': 'Deleted file',
+      'diff.unchanged': 'Both sides hold the same lines',
+      'review.split': 'Switch to split view',
+      'review.unified': 'Switch to unified view',
+      'review.splitAria': 'Split view',
+      'review.wrap': 'Enable line wrap',
+      'review.nowrap': 'Disable line wrap',
+      'review.wrapAria': 'Line wrap',
+      'commitDiff.title': 'Commit file changes',
+      'commitDiff.missing': 'Missing parameters for this diff.',
 
       'toolbar.refresh': 'Refresh',
       'toolbar.busy': 'Updating…',
@@ -267,6 +294,10 @@ window.__ModuleLoader__.load({
     const NOTICE_MS = 5000
     /** Commit rows requested from the Host half. */
     const LOG_LIMIT = 80
+    /** Right-Sidebar tab kind of the commit-file diff page. */
+    const COMMIT_DIFF_KIND = 'git-commit-diff'
+    /** Implementation id of that tab type; also the key its body and chip title register under. */
+    const COMMIT_DIFF_TAB_ID = 'dsh-git-panel:commit-diff'
     /** Horizontal distance between two graph lanes, in pixels. */
     const LANE_WIDTH = 12
     /** Height of one commit row, in pixels. */
@@ -342,7 +373,7 @@ window.__ModuleLoader__.load({
     /** Default source-control pane width, in pixels. */
     const SPLIT_DEFAULT = 340
     /** Narrowest source-control pane, in pixels. */
-    const SPLIT_MIN = 280
+    const SPLIT_MIN = 160
     /** Largest source-control pane, as a fraction of the view width. */
     const SPLIT_MAX_RATIO = 0.7
     /** Keyboard step of the split divider, in pixels. */
@@ -579,6 +610,44 @@ window.__ModuleLoader__.load({
 .dsh-git-lineMeta{color:var(--dsh-git-faint)}
 .dsh-git-linePlain{color:var(--dsw-alias-label-primary)}
 .dsh-git-diffNote{margin:0;padding:8px 12px;font-size:11px;line-height:18px;color:var(--dsh-git-faint)}
+.dsh-git-sidebarTab{flex:1 1 0;width:100%;height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:13px;line-height:1.5;--dsh-git-diff-empty-fill:color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 50%, transparent)}
+.dsh-git-sidebarTabHeader{flex:none;display:flex;align-items:center;gap:6px;height:38px;padding:0 6px 0 8px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.dsh-git-sidebarTabPath{flex:0 1 auto;min-width:0;overflow:hidden;display:flex;align-items:center}
+.dsh-git-sidebarTabCounts{flex:none;display:flex;align-items:center;gap:6px;font-family:var(--dsh-git-mono);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.dsh-git-sidebarTabAdd{color:var(--dsw-alias-state-success-primary)}
+.dsh-git-sidebarTabDel{color:var(--dsw-alias-state-error-primary)}
+.dsh-git-sidebarTabSpacer{flex:1;min-width:0}
+.dsh-git-sidebarTabTool{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dsh-git-sidebarTabTool:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsh-git-sidebarTabTool[aria-pressed="true"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsh-git-sidebarTabMeta{flex:none;margin:0;padding:6px 16px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsh-git-faint)}
+.dsh-git-diffBody{flex:1;min-height:0;overflow:auto;padding:8px 0 16px;font:var(--dsw-font-markdown-code-block);display:flex;flex-direction:column;scrollbar-gutter:stable}
+.dsh-git-diffBody[data-view="unified"]:not([data-wrap="true"]){display:grid;grid-template-columns:minmax(max-content,100%);align-content:start}
+.dsh-git-diffStatus{margin:0;padding:16px;display:flex;align-items:center;gap:12px;font-size:13px;color:var(--dsw-alias-label-secondary)}
+.dsh-git-diffNote{margin:0;padding:4px 16px 8px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dsh-git-diffHunk{margin-bottom:8px}
+.dsh-git-diffHunkHeader{white-space:pre;padding:4px 16px;color:var(--dsw-alias-label-tertiary)}
+.dsh-git-diffLine{box-sizing:border-box;white-space:pre;display:grid;grid-template-columns:3.5em 3.5em 1.2em minmax(0,1fr);min-height:22px;line-height:22px}
+.dsh-git-diffNumber{color:var(--dsw-alias-label-tertiary);text-align:right;user-select:none;padding-right:8px}
+.dsh-git-diffSign{text-align:center;user-select:none}
+.dsh-git-diffText{padding-right:16px;min-width:0;display:block}
+.dsh-git-diffColumns{flex:auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:0}
+.dsh-git-diffColumn{min-width:0;overflow-x:scroll;overscroll-behavior:none;display:grid;grid-template-columns:minmax(max-content,100%);align-content:start}
+.dsh-git-diffColumn+.dsh-git-diffColumn{border-left:.5px solid var(--dsw-alias-border-l3)}
+.dsh-git-diffSideLine{box-sizing:border-box;white-space:pre;display:grid;grid-template-columns:3.5em max-content;width:max-content;min-width:100%;min-height:22px;line-height:22px}
+.dsh-git-diffSplitLine{white-space:pre;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:22px;line-height:22px}
+.dsh-git-diffCell{box-sizing:border-box;display:grid;grid-template-columns:3.5em minmax(0,1fr);min-width:0}
+.dsh-git-diffCell+.dsh-git-diffCell{border-left:.5px solid var(--dsw-alias-border-l3)}
+.dsh-git-diffBody[data-wrap="true"] .dsh-git-diffLine,.dsh-git-diffBody[data-wrap="true"] .dsh-git-diffSplitLine{white-space:pre-wrap}
+.dsh-git-diffBody[data-wrap="true"] .dsh-git-diffText{overflow-wrap:anywhere}
+.dsh-git-diffAdd{--dsh-git-diff-gutter:var(--dsw-alias-file-diff-added-gutter);--dsh-git-diff-marker:var(--dsw-alias-file-diff-added-marker);background:var(--dsw-alias-file-diff-added-bg)}
+.dsh-git-diffDel{--dsh-git-diff-gutter:var(--dsw-alias-file-diff-deleted-gutter);--dsh-git-diff-marker:var(--dsw-alias-file-diff-deleted-marker);background:var(--dsw-alias-file-diff-deleted-bg)}
+.dsh-git-diffAdd .dsh-git-diffNumber,.dsh-git-diffDel .dsh-git-diffNumber{background:var(--dsh-git-diff-gutter);color:var(--dsh-git-diff-marker)}
+.dsh-git-diffAdd .dsh-git-diffNumber:first-child,.dsh-git-diffDel .dsh-git-diffNumber:first-child{box-shadow:inset 3px 0 0 var(--dsh-git-diff-marker)}
+.dsh-git-diffAdd .dsh-git-diffSign,.dsh-git-diffDel .dsh-git-diffSign{color:var(--dsh-git-diff-marker)}
+.dsh-git-diffContext .dsh-git-diffText{color:var(--dsw-alias-label-secondary)}
+.dsh-git-diffEmpty{background:var(--dsh-git-diff-empty-fill)}
+.dsh-git-diffTitle{display:inline-flex;align-items:center;gap:4px;min-width:0}
 .dsh-git-state{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 24px;text-align:center;color:var(--dsh-git-faint)}
 .dsh-git-stateTitle{margin:0;font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary)}
 .dsh-git-stateText{margin:0;max-width:52ch;font-size:12px;line-height:18px;overflow-wrap:anywhere}
@@ -1767,6 +1836,7 @@ window.__ModuleLoader__.load({
         openFilePatch,
         t,
         refColor,
+        onOpenFile,
         onCopy,
         onRetry,
         onToggleFile,
@@ -1867,9 +1937,14 @@ window.__ModuleLoader__.load({
               key: 'row',
               type: 'button',
               className: 'dsh-git-detailFile',
-              'aria-expanded': open ? 'true' : 'false',
+              'aria-expanded': typeof onOpenFile === 'function' ? undefined : (open ? 'true' : 'false'),
               title: file.path,
-              onClick: () => { onToggleFile(file.path) },
+              onClick: () => {
+                // The right Sidebar is the primary surface; the inline patch is
+                // the fallback for a Harness without that column.
+                if (typeof onOpenFile === 'function') onOpenFile(file.path)
+                else onToggleFile(file.path)
+              },
             }, [
               h('span', {
                 key: 'badge',
@@ -1959,6 +2034,604 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Read the navigation parameters of the commit-diff right-Sidebar tab.
+     * @param useTabInfo - the tab's framework-bound information hook.
+     * @returns the target repository, commit, path, and display copy, each defaulted.
+     */
+    function readCommitDiffParams(useTabInfo) {
+      const info = typeof useTabInfo === 'function' ? useTabInfo() : null
+      const tab = info !== null && info !== undefined && typeof info === 'object' ? info.tab : null
+      const navigation = tab !== null && tab !== undefined && typeof tab === 'object' ? tab.navigation : null
+      const params = navigation !== null && navigation !== undefined && typeof navigation === 'object' && navigation.params !== null && typeof navigation.params === 'object'
+        ? navigation.params
+        : {}
+      return {
+        repo: typeof params.repo === 'string' ? params.repo : '',
+        hash: typeof params.hash === 'string' ? params.hash : '',
+        path: typeof params.path === 'string' ? params.path : '',
+        short: typeof params.short === 'string' ? params.short : '',
+        subject: typeof params.subject === 'string' ? params.subject : '',
+        revision: navigation !== null && navigation !== undefined && typeof navigation === 'object' && Number.isFinite(navigation.revision)
+          ? navigation.revision
+          : 0,
+      }
+    }
+
+    /** Maximum diff lines rendered in one Sidebar tab, matching the review tab's budget. */
+    const DIFF_MAX_RENDERED_LINES = 5000
+    /** Storage key of the Sidebar diff layout choices. */
+    const DIFF_VIEW_STORAGE_KEY = 'dsh.git.diffView'
+
+    /**
+     * Parse one unified diff into the comparison model the Harness review tab
+     * uses: numbered hunks plus created/deleted/binary markers.
+     * @param text - unified diff text.
+     * @returns the hunks and the file-level markers.
+     */
+    function parseUnifiedDiff(text) {
+      const hunks = []
+      let current = null
+      let created = false
+      let deleted = false
+      let binary = false
+      const lines = splitLines(text)
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index]
+        if (line.slice(0, 2) === '@@') {
+          const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line)
+          if (match !== null) {
+            current = {
+              oldStart: Number(match[1]),
+              oldLines: match[2] === undefined ? 1 : Number(match[2]),
+              newStart: Number(match[3]),
+              newLines: match[4] === undefined ? 1 : Number(match[4]),
+              lines: [],
+            }
+            hunks.push(current)
+            continue
+          }
+        }
+        if (line.charAt(0) === '\\') continue
+        if (line.indexOf('new file mode') === 0) { created = true; continue }
+        if (line.indexOf('deleted file mode') === 0) { deleted = true; continue }
+        if (line.indexOf('Binary files') === 0) { binary = true; continue }
+        if (line.slice(0, 10) === 'diff --git') { current = null; continue }
+        if (current === null) continue
+        const sign = line.charAt(0)
+        if (sign !== ' ' && sign !== '+' && sign !== '-') continue
+        current.lines.push(line)
+      }
+      return { hunks, created, deleted, binary }
+    }
+
+    /**
+     * Number a hunk's lines: context on both sides, deletions old, additions new.
+     * @param hunk - a parsed hunk.
+     * @returns the numbered rows.
+     */
+    function diffHunkRows(hunk) {
+      let oldNumber = hunk.oldStart
+      let newNumber = hunk.newStart
+      const rows = []
+      for (let index = 0; index < hunk.lines.length; index += 1) {
+        const line = hunk.lines[index]
+        const text = line.slice(1)
+        if (line.charAt(0) === '+') {
+          rows.push({ kind: 'add', old: null, new: newNumber, text })
+          newNumber += 1
+          continue
+        }
+        if (line.charAt(0) === '-') {
+          rows.push({ kind: 'del', old: oldNumber, new: null, text })
+          oldNumber += 1
+          continue
+        }
+        rows.push({ kind: 'context', old: oldNumber, new: newNumber, text })
+        oldNumber += 1
+        newNumber += 1
+      }
+      return rows
+    }
+
+    /**
+     * Pair a hunk's lines for the side-by-side view: each run of deletions is
+     * aligned with the run of additions that follows it, row by row.
+     * @param hunk - a parsed hunk.
+     * @returns the paired rows.
+     */
+    function diffSplitRows(hunk) {
+      const rows = []
+      let deletions = []
+      let additions = []
+      const flush = () => {
+        const count = Math.max(deletions.length, additions.length)
+        for (let at = 0; at < count; at += 1) {
+          const row = {}
+          if (deletions[at] !== undefined) row.left = deletions[at]
+          if (additions[at] !== undefined) row.right = additions[at]
+          rows.push(row)
+        }
+        deletions = []
+        additions = []
+      }
+      const numbered = diffHunkRows(hunk)
+      for (let index = 0; index < numbered.length; index += 1) {
+        const row = numbered[index]
+        if (row.kind === 'del') {
+          deletions.push({ no: row.old, text: row.text, kind: 'del' })
+          continue
+        }
+        if (row.kind === 'add') {
+          additions.push({ no: row.new, text: row.text, kind: 'add' })
+          continue
+        }
+        flush()
+        rows.push({
+          left: { no: row.old, text: row.text, kind: 'context' },
+          right: { no: row.new, text: row.text, kind: 'context' },
+        })
+      }
+      flush()
+      return rows
+    }
+
+    /**
+     * The kind a paired row carries, for styling the row.
+     * @param row - one paired row.
+     * @returns `del`, `add`, or `context`.
+     */
+    function diffSplitRowKind(row) {
+      if (row.left !== undefined && row.left.kind === 'del') return 'del'
+      if (row.right !== undefined && row.right.kind === 'add') return 'add'
+      return 'context'
+    }
+
+    /**
+     * Rebuild one hunk's header from its numbers.
+     * @param hunk - a parsed hunk.
+     * @returns the `@@ -a,b +c,d @@` line.
+     */
+    function diffHunkHeader(hunk) {
+      return '@@ -' + hunk.oldStart + ',' + hunk.oldLines + ' +' + hunk.newStart + ',' + hunk.newLines + ' @@'
+    }
+
+    /**
+     * Cut the rendered hunks at the line budget.
+     * @param hunks - parsed hunks.
+     * @returns the kept hunks and whether anything was cut.
+     */
+    function diffRenderedHunks(hunks) {
+      let budget = DIFF_MAX_RENDERED_LINES
+      const kept = []
+      for (let index = 0; index < hunks.length; index += 1) {
+        const hunk = hunks[index]
+        if (budget === 0) return { hunks: kept, truncated: true }
+        kept.push(hunk.lines.length <= budget ? hunk : Object.assign({}, hunk, { lines: hunk.lines.slice(0, budget) }))
+        budget -= Math.min(budget, hunk.lines.length)
+      }
+      return { hunks: kept, truncated: kept.some((hunk, at) => hunk !== hunks[at]) }
+    }
+
+    /**
+     * Highlight one side of a hunk, keyed by line number.
+     * @param rows - numbered rows.
+     * @param side - `old` or `new`.
+     * @param highlighter - the primitives highlighter.
+     * @returns spans by line number, or undefined when highlighting is unavailable.
+     */
+    function diffHighlightedSide(rows, side, highlighter) {
+      const source = []
+      for (let index = 0; index < rows.length; index += 1) {
+        const no = rows[index][side]
+        if (no === null || no === undefined) continue
+        source.push({ no, text: rows[index].text })
+      }
+      if (source.length === 0) return new Map()
+      const highlighted = highlighter(source.map((line) => line.text).join('\n'))
+      if (highlighted === undefined || highlighted === null) return undefined
+      const result = new Map()
+      for (let index = 0; index < source.length; index += 1) {
+        result.set(source[index].no, highlighted[index] === undefined ? [] : highlighted[index])
+      }
+      return result
+    }
+
+    /**
+     * Highlight both sides of one hunk.
+     * @param hunk - a parsed hunk.
+     * @param highlighter - the primitives highlighter.
+     * @returns spans by side and line number.
+     */
+    function diffHunkHighlights(hunk, highlighter) {
+      const rows = diffHunkRows(hunk)
+      return {
+        old: diffHighlightedSide(rows, 'old', highlighter),
+        new: diffHighlightedSide(rows, 'new', highlighter),
+      }
+    }
+
+    /**
+     * Render one diff text cell, with the highlighter's spans when it produced any.
+     * @param props - cell text and optional spans.
+     * @returns the text element.
+     */
+    function DiffText(props) {
+      const spans = props.spans
+      if (spans === undefined || spans === null) {
+        return h('span', { key: 'text', className: 'dsh-git-diffText' }, props.text)
+      }
+      return h('span', { key: 'text', className: 'dsh-git-diffText', 'data-diff-code': 'true' },
+        spans.map((span, index) => h('span', { key: index, style: span.style }, span.text)))
+    }
+
+    /**
+     * Render one hunk in the single-column layout.
+     * @param hunk - a rendered hunk.
+     * @param position - hunk index, for keys.
+     * @param highlighted - spans by side and line number.
+     * @returns the hunk section.
+     */
+    function renderUnifiedHunk(hunk, position, highlighted) {
+      const numbered = diffHunkRows(hunk)
+      const rows = []
+      for (let index = 0; index < numbered.length; index += 1) {
+        const row = numbered[index]
+        const spans = row.kind === 'add'
+          ? (highlighted.new === undefined ? undefined : highlighted.new.get(row.new))
+          : (highlighted.old === undefined ? undefined : highlighted.old.get(row.old))
+        rows.push(h('div', {
+          key: 'line-' + index,
+          className: 'dsh-git-diffLine dsh-git-diff' + (row.kind === 'add' ? 'Add' : row.kind === 'del' ? 'Del' : 'Context'),
+          'data-diff-line': row.kind,
+        }, [
+          h('span', { key: 'oldNo', className: 'dsh-git-diffNumber' }, row.old === null ? '' : String(row.old)),
+          h('span', { key: 'newNo', className: 'dsh-git-diffNumber' }, row.new === null ? '' : String(row.new)),
+          h('span', { key: 'sign', className: 'dsh-git-diffSign' }, row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '),
+          h(DiffText, { key: 'text', text: row.text, spans }),
+        ]))
+      }
+      return h('section', { key: 'hunk-' + position, className: 'dsh-git-diffHunk' }, [
+        h('div', { key: 'header', className: 'dsh-git-diffHunkHeader', 'data-diff-hunk-header': 'true' }, diffHunkHeader(hunk)),
+        ...rows,
+      ])
+    }
+
+    /**
+     * Render one hunk in the wrapped side-by-side layout.
+     * @param hunk - a rendered hunk.
+     * @param position - hunk index, for keys.
+     * @param highlighted - spans by side and line number.
+     * @returns the hunk section.
+     */
+    function renderWrappedSplitHunk(hunk, position, highlighted) {
+      const paired = diffSplitRows(hunk)
+      const rows = []
+      const cell = (side, entry, spans) => h('span', {
+        key: side,
+        className: 'dsh-git-diffCell ' + (entry === undefined ? 'dsh-git-diffEmpty' : 'dsh-git-diff' + (entry.kind === 'add' ? 'Add' : entry.kind === 'del' ? 'Del' : 'Context')),
+      }, [
+        h('span', { key: 'no', className: 'dsh-git-diffNumber' }, entry === undefined ? '' : String(entry.no)),
+        h(DiffText, { key: 'text', text: entry === undefined ? '' : entry.text, spans }),
+      ])
+      for (let index = 0; index < paired.length; index += 1) {
+        const row = paired[index]
+        const left = row.left
+        const right = row.right
+        rows.push(h('div', {
+          key: 'row-' + index,
+          className: 'dsh-git-diffSplitLine',
+          'data-diff-line': diffSplitRowKind(row),
+        }, [
+          cell('left', left, left === undefined ? undefined : (highlighted.old === undefined ? undefined : highlighted.old.get(left.no))),
+          cell('right', right, right === undefined ? undefined : (highlighted.new === undefined ? undefined : highlighted.new.get(right.no))),
+        ]))
+      }
+      return h('section', { key: 'hunk-' + position, className: 'dsh-git-diffHunk' }, [
+        h('div', { key: 'header', className: 'dsh-git-diffHunkHeader', 'data-diff-hunk-header': 'true' }, diffHunkHeader(hunk)),
+        ...rows,
+      ])
+    }
+
+    /**
+     * Render the side-by-side view without wrapping: two columns that scroll
+     * together on both axes, one fixed-height row per pair.
+     * @param props - rendered hunks and their highlights.
+     * @returns the two-column body.
+     */
+    function SidebarSplitColumns(props) {
+      const hunks = props.hunks
+      const highlights = props.highlights
+      const paired = useMemo(() => hunks.map((hunk) => ({ header: diffHunkHeader(hunk), rows: diffSplitRows(hunk) })), [hunks])
+      const columns = useRef({ left: null, right: null })
+      const offsets = useRef({ left: { scrollLeft: 0, scrollTop: 0 }, right: { scrollLeft: 0, scrollTop: 0 } })
+      const follow = (side) => (event) => {
+        const peer = side === 'left' ? 'right' : 'left'
+        const other = columns.current[peer]
+        if (other === null) return
+        const axes = ['scrollLeft', 'scrollTop']
+        for (let index = 0; index < axes.length; index += 1) {
+          const axis = axes[index]
+          const value = event.currentTarget[axis]
+          if (offsets.current[side][axis] === value) continue
+          offsets.current[side][axis] = value
+          other[axis] = value
+          offsets.current[peer][axis] = value
+        }
+      }
+      const renderColumn = (side) => h('div', {
+        key: side,
+        className: 'dsh-git-diffColumn',
+        'data-diff-side': side,
+        ref: (element) => { columns.current[side] = element },
+        onScroll: follow(side),
+      }, paired.map((hunk, position) => h('section', { key: position, className: 'dsh-git-diffHunk' }, [
+        h('div', { key: 'header', className: 'dsh-git-diffHunkHeader', 'data-diff-hunk-header': 'true' }, hunk.header),
+        ...hunk.rows.map((row, at) => {
+          const entry = row[side]
+          const sideHighlights = side === 'left'
+            ? (highlights[position] === undefined ? undefined : highlights[position].old)
+            : (highlights[position] === undefined ? undefined : highlights[position].new)
+          const spans = entry === undefined ? undefined : (sideHighlights === undefined ? undefined : sideHighlights.get(entry.no))
+          return h('div', {
+            key: at,
+            className: 'dsh-git-diffSideLine ' + (entry === undefined ? 'dsh-git-diffEmpty' : 'dsh-git-diff' + (entry.kind === 'add' ? 'Add' : entry.kind === 'del' ? 'Del' : 'Context')),
+            'data-diff-line': diffSplitRowKind(row),
+          }, [
+            h('span', { key: 'no', className: 'dsh-git-diffNumber' }, entry === undefined ? '' : String(entry.no)),
+            h(DiffText, { key: 'text', text: entry === undefined ? '' : entry.text, spans }),
+          ])
+        }),
+      ])))
+      return h('div', { key: 'columns', className: 'dsh-git-diffColumns' }, ['left', 'right'].map(renderColumn))
+    }
+
+    /**
+     * Render a parsed commit diff with the review tab's layout choices and notes.
+     * @param props - parsed diff, file path, layout choices, and copy.
+     * @returns the scrollable diff body.
+     */
+    function SidebarDiffView(props) {
+      const t = props.t
+      const parsed = props.parsed
+      const rendered = useMemo(() => diffRenderedHunks(parsed.hunks), [parsed.hunks])
+      const highlighter = primitives.useCodeHighlighter(primitives.languageForPath(props.path))
+      const highlights = useMemo(() => rendered.hunks.map((hunk) => diffHunkHighlights(hunk, highlighter)), [rendered.hunks, highlighter])
+      const hunks = rendered.hunks
+      let hasAdd = false
+      let hasDel = false
+      for (let index = 0; index < hunks.length; index += 1) {
+        for (let lineIndex = 0; lineIndex < hunks[index].lines.length; lineIndex += 1) {
+          const sign = hunks[index].lines[lineIndex].charAt(0)
+          if (sign === '+') hasAdd = true
+          if (sign === '-') hasDel = true
+        }
+      }
+      const oneSided = hasAdd !== hasDel
+      const split = props.split && !oneSided
+      const notes = []
+      if (parsed.created === true) notes.push(t('diff.created'))
+      else if (parsed.deleted === true) notes.push(t('diff.deleted'))
+      else if (hunks.length === 0) notes.push(t('diff.unchanged'))
+      if (rendered.truncated) notes.push(t('diff.truncatedLines', { count: String(DIFF_MAX_RENDERED_LINES) }))
+      const children = notes.map((text, index) => h('p', { key: 'note-' + index, className: 'dsh-git-diffNote' }, text))
+      if (parsed.binary === true) {
+        children.push(h('p', { key: 'binary', className: 'dsh-git-diffNote' }, t('diff.binary')))
+      } else if (split && !props.wrap) {
+        children.push(h(SidebarSplitColumns, { key: 'columns', hunks, highlights }))
+      } else {
+        for (let index = 0; index < hunks.length; index += 1) {
+          children.push(split
+            ? renderWrappedSplitHunk(hunks[index], index, highlights[index])
+            : renderUnifiedHunk(hunks[index], index, highlights[index]))
+        }
+      }
+      return h('div', {
+        key: 'body',
+        className: 'dsh-git-diffBody',
+        'data-view': split ? 'split' : 'unified',
+        'data-wrap': props.wrap ? 'true' : 'false',
+      }, children)
+    }
+
+    /**
+     * Read the persisted Sidebar diff layout choices.
+     * @returns the split and wrap flags.
+     */
+    function readDiffViewPrefs() {
+      try {
+        const raw = window.localStorage.getItem(DIFF_VIEW_STORAGE_KEY)
+        if (raw === null) return { split: false, wrap: false }
+        const parsed = JSON.parse(raw)
+        if (parsed === null || typeof parsed !== 'object') return { split: false, wrap: false }
+        return { split: parsed.split === true, wrap: parsed.wrap === true }
+      } catch {
+        // A blocked or unreadable store only loses the layout choice.
+        return { split: false, wrap: false }
+      }
+    }
+
+    /**
+     * Persist the Sidebar diff layout choices.
+     * @param value - the split and wrap flags.
+     */
+    function writeDiffViewPrefs(value) {
+      try {
+        window.localStorage.setItem(DIFF_VIEW_STORAGE_KEY, JSON.stringify({ split: value.split === true, wrap: value.wrap === true }))
+      } catch {
+        // A blocked or full store only loses the layout choice.
+      }
+    }
+
+    /**
+     * Right-Sidebar tab body showing one commit file's diff.
+     *
+     * It is a page type of its own, so opening another file navigates this tab
+     * instead of stacking duplicates. Layout, controls, line numbering, colours
+     * and syntax highlighting follow the Harness review tab: single column or
+     * side by side, with an optional line wrap.
+     * @param props - locale copy, the injected diff loader, and the tab information hook.
+     * @returns the tab body.
+     */
+    function CommitDiffTab(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackTranslate
+      const target = readCommitDiffParams(props.useTabInfo)
+      const loadDiffRef = useRef(props.loadCommitDiff)
+      loadDiffRef.current = props.loadCommitDiff
+      const translateRef = useRef(t)
+      translateRef.current = t
+      const [state, setState] = useState({ phase: 'idle', data: null, error: null })
+      const [attempt, setAttempt] = useState(0)
+      const [prefs, setPrefs] = useState(readDiffViewPrefs)
+
+      useEffect(() => {
+        if (target.repo === '' || target.hash === '' || target.path === '') {
+          setState({ phase: 'error', data: null, error: translateRef.current('commitDiff.missing') })
+          return undefined
+        }
+        const controller = new AbortController()
+        setState({ phase: 'loading', data: null, error: null })
+        const loader = loadDiffRef.current
+        Promise.resolve(typeof loader === 'function' ? loader({ repo: target.repo, hash: target.hash, path: target.path }, controller.signal) : null).then(
+          (value) => {
+            if (controller.signal.aborted) return
+            setState({
+              phase: 'ready',
+              data: value !== null && typeof value === 'object' ? value : { diff: '', truncated: false, untracked: false },
+              error: null,
+            })
+          },
+          (failure) => {
+            if (controller.signal.aborted || isAbort(failure)) return
+            setState({ phase: 'error', data: null, error: messageOf(failure, translateRef.current) })
+          },
+        )
+        return () => { controller.abort() }
+      }, [target.repo, target.hash, target.path, target.revision, attempt])
+
+      const togglePref = (key) => {
+        setPrefs((current) => {
+          const next = { split: current.split, wrap: current.wrap }
+          next[key] = !current[key]
+          writeDiffViewPrefs(next)
+          return next
+        })
+      }
+
+      const parsed = useMemo(() => {
+        if (state.phase !== 'ready' || state.data === null) return { hunks: [], created: false, deleted: false, binary: false }
+        return parseUnifiedDiff(typeof state.data.diff === 'string' ? state.data.diff : '')
+      }, [state])
+
+      const counts = useMemo(() => {
+        let add = 0
+        let del = 0
+        for (let hunkIndex = 0; hunkIndex < parsed.hunks.length; hunkIndex += 1) {
+          const lines = parsed.hunks[hunkIndex].lines
+          for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+            const sign = lines[lineIndex].charAt(0)
+            if (sign === '+') add += 1
+            else if (sign === '-') del += 1
+          }
+        }
+        return { add, del }
+      }, [parsed])
+
+      const tools = [
+        h(primitives.Tooltip, {
+          key: 'split',
+          label: t(prefs.split ? 'review.unified' : 'review.split'),
+          side: 'bottom',
+          delayMs: 500,
+        }, h('button', {
+          type: 'button',
+          className: 'dsh-git-sidebarTabTool',
+          'aria-pressed': prefs.split,
+          'aria-label': t('review.splitAria'),
+          'data-review-tool': 'split',
+          onClick: () => { togglePref('split') },
+        }, h(primitives.IconCompareSplitOutlineRegular, {}))),
+        h(primitives.Tooltip, {
+          key: 'wrap',
+          label: t(prefs.wrap ? 'review.nowrap' : 'review.wrap'),
+          side: 'bottom',
+          delayMs: 500,
+        }, h('button', {
+          type: 'button',
+          className: 'dsh-git-sidebarTabTool',
+          'aria-pressed': prefs.wrap,
+          'aria-label': t('review.wrapAria'),
+          'data-review-tool': 'wrap',
+          onClick: () => { togglePref('wrap') },
+        }, prefs.wrap ? h(primitives.IconNowrapFillRegular, {}) : h(primitives.IconWrapFillRegular, {}))),
+      ]
+
+      const children = [
+        h('div', { key: 'header', className: 'dsh-git-sidebarTabHeader' }, [
+          h('span', { key: 'path', className: 'dsh-git-sidebarTabPath' }, h(primitives.PathLabel, { path: target.path })),
+          state.phase === 'ready'
+            ? h('span', { key: 'counts', className: 'dsh-git-sidebarTabCounts' }, [
+              h('span', { key: 'add', className: 'dsh-git-sidebarTabAdd' }, '+' + String(counts.add)),
+              h('span', { key: 'del', className: 'dsh-git-sidebarTabDel' }, '−' + String(counts.del)),
+            ])
+            : null,
+          h('span', { key: 'spacer', className: 'dsh-git-sidebarTabSpacer' }),
+          ...tools,
+        ]),
+        target.subject === ''
+          ? null
+          : h('p', { key: 'meta', className: 'dsh-git-sidebarTabMeta' },
+            (target.short !== '' ? target.short : shortOf(target.hash)) + ' · ' + target.subject),
+      ]
+      if (state.phase === 'idle' || state.phase === 'loading') {
+        children.push(h('p', { key: 'loading', className: 'dsh-git-diffStatus', role: 'status' }, t('diff.loading')))
+      } else if (state.phase === 'error') {
+        children.push(h('div', { key: 'error', className: 'dsh-git-diffStatus' }, [
+          h('span', { key: 'text' }, state.error === null ? t('diff.error') : state.error),
+          h('button', {
+            key: 'retry',
+            type: 'button',
+            className: 'dsh-git-miniButton',
+            onClick: () => { setAttempt((value) => value + 1) },
+          }, t('state.retry')),
+        ]))
+      } else {
+        children.push(h(SidebarDiffView, {
+          key: 'diff',
+          parsed,
+          path: target.path,
+          split: prefs.split,
+          wrap: prefs.wrap,
+          t,
+        }))
+      }
+
+      return h('section', {
+        key: 'root',
+        className: 'dsh-git-view dsh-git-sidebarTab',
+        'aria-label': t('commitDiff.title'),
+      }, [
+        h('style', { key: 'style' }, CSS),
+        ...children,
+      ])
+    }
+
+    /**
+     * Chip title of the commit-diff tab: the changed file's name and type icon.
+     * @param props - locale copy and the tab information hook.
+     * @returns the chip content.
+     */
+    function CommitDiffTitle(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackTranslate
+      const target = readCommitDiffParams(props.useTabInfo)
+      const name = splitPath(target.path).name
+      if (name === '') return h('span', { key: 'title', className: 'dsh-git-tabLabel' }, t('commitDiff.title'))
+      return h('span', { key: 'title', className: 'dsh-git-diffTitle' }, [
+        h(primitives.FileTypeIcon, { key: 'icon', kind: primitives.classifyFileType(name), size: 16 }),
+        name,
+      ])
+    }
+
+    /**
      * Render the two invisible column resize handles over the commit list.
      * @param options - current widths, copy, and pointer/keyboard/reset handlers.
      * @returns the handle overlay.
@@ -2019,6 +2692,7 @@ window.__ModuleLoader__.load({
       const t = typeof props.t === 'function' ? props.t : fallbackTranslate
       const sessionId = props.sessionId
       const inputActions = props.inputActions
+      const openCommitDiff = typeof props.openCommitDiff === 'function' ? props.openCommitDiff : null
 
       const useSessions = typeof props.useSessions === 'function' ? props.useSessions : useSessionsFallback
       const useWorkspaces = typeof props.useWorkspaces === 'function' ? props.useWorkspaces : useWorkspacesFallback
@@ -3489,6 +4163,16 @@ window.__ModuleLoader__.load({
                   openFilePatch,
                   t,
                   refColor: row.dot.colorIndex,
+                  onOpenFile: openCommitDiff === null ? null : (path) => {
+                    if (repository === null) return
+                    openCommitDiff({
+                      repo: repository,
+                      hash,
+                      short: typeof commit.short === 'string' ? commit.short : shortOf(hash),
+                      subject: typeof commit.subject === 'string' ? commit.subject : '',
+                      path,
+                    })
+                  },
                   onCopy: (value) => { void copyHash(value) },
                   onRetry: retryCommitDetail,
                   onToggleFile: toggleCommitFile,
@@ -3631,11 +4315,31 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale'],
+      inject: ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register('git.view', { zh: ZH, en: EN }), 'git-panel: dictionaries')
         const t = ctx.locale.bind('git.view')
         const callHost = (action, params, signal) => postGitAction(action, params, signal, t)
+        const loadCommitDiff = (params, signal) => callHost('commitDiff', params, signal)
+
+        // Commit-file diffs are a right-Sidebar tab type of this bundle: a page
+        // kind, so opening another file navigates the one tab instead of stacking.
+        ctx.effect(() => ctx.sidebarRightTabs.register({
+          id: COMMIT_DIFF_TAB_ID,
+          kind: COMMIT_DIFF_KIND,
+          title: () => t('commitDiff.title'),
+        }), 'git-panel: commit diff tab type')
+        ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: COMMIT_DIFF_TAB_ID,
+          locale: 'git.view',
+          inject: () => ({ loadCommitDiff }),
+        }, CommitDiffTab)), 'git-panel: commit diff tab body')
+        ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
+          name: 'sidebar.right.pane.tab.title',
+          key: COMMIT_DIFF_TAB_ID,
+          locale: 'git.view',
+        }, CommitDiffTitle)), 'git-panel: commit diff tab title')
 
         ctx.slots.inject('conversation.view', () => ctx.slots.register({
           name: 'conversation.view',
@@ -3643,7 +4347,10 @@ window.__ModuleLoader__.load({
           order: 20,
           locale: 'git.view',
           label: () => t('view.label'),
-          inject: () => ({ call: callHost }),
+          inject: () => ({
+            call: callHost,
+            openCommitDiff: (params) => { ctx.sidebarRight.openTab(COMMIT_DIFF_KIND, { params }) },
+          }),
         }, GitView))
       },
     }
