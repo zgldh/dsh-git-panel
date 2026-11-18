@@ -85,6 +85,15 @@ Edit the `git-panel` row in your profile patch (or the bundle's `cordis.patch.ym
 - Column/split widths and the diff layout choice are stored in `localStorage`; view memory is per Session in `sessionStorage` (per browser tab).
 - AI prompts are fill-only: the plugin never sends the message and never triggers a Git write operation. Commit-message generation is not implemented yet.
 
+## Reading the graph
+
+- A lane keeps its column for its whole life; a continuing branch line is always a straight vertical segment.
+- A merge or a join is drawn as a short diagonal from the commit dot to the column it links to. The corner of the graph is not a change of branch.
+- A newly started branch takes the leftmost free column, or a new right-hand column when every column is busy.
+- A branch or tag chip uses the colour of the commit's lane, so a label can be matched to its line at a glance.
+- The first parent of a merge keeps the merge commit's own lane and colour; a second parent starts or joins a differently coloured line.
+- Scrolling the list to the bottom loads the next page of older commits; the header shows how many are loaded so far.
+
 ## Development
 
 ```sh
