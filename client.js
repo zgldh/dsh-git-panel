@@ -627,6 +627,8 @@ window.__ModuleLoader__.load({
 .dsh-git-sidebarTabTool{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dsh-git-sidebarTabTool:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-git-sidebarTabTool[aria-pressed="true"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsh-git-compareIcon{transition:transform .15s ease}
+.dsh-git-sidebarTabTool[aria-pressed="true"] .dsh-git-compareIcon{transform:rotate(90deg)}
 .dsh-git-sidebarTabMeta{flex:none;margin:0;padding:6px 16px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsh-git-faint)}
 .dsh-git-diffBody{flex:1;min-height:0;overflow:auto;padding:8px 0 16px;font:var(--dsw-font-markdown-code-block);display:flex;flex-direction:column;scrollbar-gutter:stable}
 .dsh-git-diffBody[data-view="unified"]:not([data-wrap="true"]){display:grid;grid-template-columns:minmax(max-content,100%);align-content:start}
@@ -2599,7 +2601,7 @@ window.__ModuleLoader__.load({
           'aria-label': t('review.splitAria'),
           'data-review-tool': 'split',
           onClick: () => { togglePref('split') },
-        }, h(primitives.IconCompareSplitOutlineRegular, {}))),
+        }, h(primitives.IconCompareSplitOutlineRegular, { className: 'dsh-git-compareIcon' }))),
         h(primitives.Tooltip, {
           key: 'wrap',
           label: t(prefs.wrap ? 'review.nowrap' : 'review.wrap'),
