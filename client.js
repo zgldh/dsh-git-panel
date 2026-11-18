@@ -361,7 +361,7 @@ window.__ModuleLoader__.load({
     /** No child directory was probed yet for a path. */
     const EMPTY_BROWSE_ENTRIES = Object.freeze([])
     /** No lane continues below a graph row. */
-    const EMPTY_LANE_COLORS = Object.freeze([])
+    const EMPTY_LANES = Object.freeze([])
     /** Stand-in snapshots keep the selector hooks callable when the kit omits them. */
     const EMPTY_SESSION_STATE = Object.freeze({ byId: {}, phase: 'ready' })
     const EMPTY_WORKSPACE_STATE = Object.freeze({ items: EMPTY_FILES, phase: 'ready' })
@@ -1128,21 +1128,6 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * S-curve moving a continuing lane sideways between two rows.
-     * @param fromLane - lane at the top edge.
-     * @param toLane - lane at the bottom edge.
-     * @returns the path data.
-     */
-    function shiftPath(fromLane, toLane) {
-      const x1 = laneX(fromLane)
-      const x2 = laneX(toLane)
-      const midX = (x1 + x2) / 2
-      const midY = ROW_HEIGHT / 2
-      return 'M' + x1 + ' 0Q' + x1 + ' ' + midY + ' ' + midX + ' ' + midY
-        + 'Q' + x2 + ' ' + midY + ' ' + x2 + ' ' + ROW_HEIGHT
-    }
-
-    /**
      * Curve from the commit dot into a parent lane at the bottom edge.
      * @param fromLane - lane carrying the dot.
      * @param toLane - lane carrying the parent.
@@ -1161,17 +1146,18 @@ window.__ModuleLoader__.load({
     /**
      * Assign every commit a graph lane and the line segments its row draws.
      *
-     * A lane holds the hash of the commit its line is heading for. The array is
-     * always dense, so the graph stays flush against its left edge: a lane that
-     * ends at a commit is removed and every lane to its right moves one column
-     * left within that row, drawn as an S-curve. A commit takes the lane that
-     * already points at it, else a new right-hand lane. Its first parent
-     * inherits that lane; every further parent reuses its lane when one exists
-     * and otherwise inserts a new lane directly beside the commit's own.
+     * A lane holds the hash of the commit its line is heading for, or null when
+     * the column is free. Columns never move: a line keeps its column for as long
+     * as it is live, so continuing lines are straight vertical segments and only
+     * a merge or a join edge bends towards the column it links to. A commit takes
+     * the lane that already points at it; its first parent inherits that lane.
+     * Every further parent reuses its lane when one exists and otherwise takes the
+     * leftmost free column, or a new right-hand column when none is free, so
+     * starting a branch never shoves an existing line sideways.
      *
      * Colours travel with the line, not with the lane index: `laneColors` runs
-     * parallel to `lanes` and holds palette indices, so a lane shifted sideways
-     * keeps its colour, and only a brand-new branch line draws a new one.
+     * parallel to `lanes` and holds palette indices, so a lane keeps its colour
+     * for its whole life, and only a brand-new branch line draws a new one.
      * @param commits - commits in topological order, newest first.
      * @returns the rows with their geometry, and the widest lane count.
      */
@@ -1215,58 +1201,51 @@ window.__ModuleLoader__.load({
         const top = lanes.slice()
         const topColors = laneColors.slice()
         const inherited = top.indexOf(hash)
-        const lane = inherited === -1 ? top.length : inherited
+        let lane = inherited
+        if (lane === -1) {
+          lane = top.indexOf(null)
+          if (lane === -1) lane = top.length
+        }
         let dotColor = topColors[lane]
         if (typeof dotColor !== 'number') dotColor = allocateColor()
         /** Colour a continuing lane keeps across the row. */
         const colorOfTop = (topIndex) => (typeof topColors[topIndex] === 'number' ? topColors[topIndex] : allocateColor())
 
-        // Dense layout after this row: a lane that keeps running stays in order,
-        // a lane converging into this commit ends here, and the commit's parents
-        // take their place beside its own line. Removed lanes are not left as
-        // holes, so every continuing line that sits to their right moves left.
-        const bottom = []
-        const bottomColors = []
-        const bottomIndexOfTop = []
-        const converging = []
-        const pushLane = (value, color) => {
-          bottom.push(value)
-          bottomColors.push(color)
-          return bottom.length - 1
+        // Columns stay where they are: continuing lanes are copied unchanged, so
+        // their lines remain vertical. This commit's own column keeps the first
+        // parent, lanes that also point at this commit end here, and extra parents
+        // take a free column when one exists instead of pushing lines aside.
+        const bottom = top.slice()
+        const bottomColors = topColors.slice()
+        while (bottom.length <= lane) {
+          bottom.push(null)
+          bottomColors.push(null)
         }
-        let firstLane = -1
         for (let topIndex = 0; topIndex < top.length; topIndex += 1) {
-          if (topIndex === lane) {
-            bottomIndexOfTop[topIndex] = -1
-            if (parents.length > 0) firstLane = pushLane(parents[0], dotColor)
-            continue
-          }
-          if (top[topIndex] === hash) {
-            converging.push(topIndex)
-            bottomIndexOfTop[topIndex] = -1
-            continue
-          }
-          bottomIndexOfTop[topIndex] = pushLane(top[topIndex], colorOfTop(topIndex))
+          if (topIndex === lane || top[topIndex] !== hash) continue
+          bottom[topIndex] = null
+          bottomColors[topIndex] = null
         }
-        if (firstLane === -1 && parents.length > 0) firstLane = pushLane(parents[0], dotColor)
+        bottom[lane] = parents.length > 0 ? parents[0] : null
+        bottomColors[lane] = parents.length > 0 ? dotColor : null
 
-        const extraTargets = []
-        let inserted = 0
+        const targets = []
+        if (parents.length > 0) targets.push({ lane, order: 0, colorIndex: dotColor })
         for (let parentIndex = 1; parentIndex < parents.length; parentIndex += 1) {
           const parent = parents[parentIndex]
-          const existing = bottom.indexOf(parent)
-          if (existing !== -1) {
-            extraTargets.push({ lane: existing, order: parentIndex })
-            continue
+          let target = bottom.indexOf(parent)
+          if (target === -1) {
+            target = bottom.indexOf(null)
+            if (target === -1) {
+              target = bottom.length
+              bottom.push(null)
+              bottomColors.push(null)
+            }
+            bottom[target] = parent
+            bottomColors[target] = allocateColor()
           }
-          const at = firstLane === -1 ? bottom.length : firstLane + 1 + inserted
-          bottom.splice(at, 0, parent)
-          bottomColors.splice(at, 0, allocateColor())
-          for (let topIndex = 0; topIndex < bottomIndexOfTop.length; topIndex += 1) {
-            if (bottomIndexOfTop[topIndex] !== -1 && bottomIndexOfTop[topIndex] >= at) bottomIndexOfTop[topIndex] += 1
-          }
-          extraTargets.push({ lane: at, order: parentIndex })
-          inserted += 1
+          if (typeof bottomColors[target] !== 'number') bottomColors[target] = allocateColor()
+          targets.push({ lane: target, order: parentIndex, colorIndex: bottomColors[target] })
         }
 
         if (bottom.length > laneCount) laneCount = bottom.length
@@ -1274,39 +1253,37 @@ window.__ModuleLoader__.load({
         if (inherited !== -1) shapes.push({ key: 'top', d: verticalPath(lane, 0, ROW_HEIGHT / 2), colorIndex: dotColor })
         for (let topIndex = 0; topIndex < top.length; topIndex += 1) {
           if (topIndex === lane) continue
+          if (top[topIndex] === null || top[topIndex] === undefined) continue
           const lineColor = colorOfTop(topIndex)
           if (top[topIndex] === hash) {
             shapes.push({ key: 'join-' + topIndex, d: convergePath(topIndex, lane), colorIndex: lineColor })
             continue
           }
-          const to = bottomIndexOfTop[topIndex]
+          shapes.push({ key: 'lane-' + topIndex, d: verticalPath(topIndex, 0, ROW_HEIGHT), colorIndex: lineColor })
+        }
+        for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
+          const target = targets[targetIndex]
+          const targetColor = typeof target.colorIndex === 'number' ? target.colorIndex : dotColor
           shapes.push({
-            key: 'lane-' + topIndex,
-            d: to === topIndex ? verticalPath(topIndex, 0, ROW_HEIGHT) : shiftPath(topIndex, to),
-            colorIndex: lineColor,
+            key: 'parent-' + target.order,
+            d: target.order === 0
+              ? verticalPath(lane, ROW_HEIGHT / 2, ROW_HEIGHT)
+              : mergePath(lane, target.lane),
+            colorIndex: targetColor,
           })
         }
-        if (parents.length > 0) {
-          // A second parent's edge belongs to that parent's branch line, so it
-          // keeps that line's colour; only the first parent continues the dot's line.
-          shapes.push({
-            key: 'parent-0',
-            d: firstLane === lane ? verticalPath(lane, ROW_HEIGHT / 2, ROW_HEIGHT) : mergePath(lane, firstLane),
-            colorIndex: dotColor,
-          })
-          for (let targetIndex = 0; targetIndex < extraTargets.length; targetIndex += 1) {
-            const target = extraTargets[targetIndex]
-            const targetColor = typeof bottomColors[target.lane] === 'number' ? bottomColors[target.lane] : dotColor
-            shapes.push({ key: 'parent-' + target.order, d: mergePath(lane, target.lane), colorIndex: targetColor })
-          }
+        const below = []
+        for (let columnIndex = 0; columnIndex < bottom.length; columnIndex += 1) {
+          if (bottom[columnIndex] === null || typeof bottomColors[columnIndex] !== 'number') continue
+          below.push({ lane: columnIndex, colorIndex: bottomColors[columnIndex] })
         }
         rows.push({
           commit,
           lane,
-          width: Math.max(top.length, bottom.length),
+          width: bottom.length,
           shapes,
           dot: { x: laneX(lane), colorIndex: dotColor },
-          belowColors: bottomColors.slice(),
+          below,
         })
         lanes = bottom
         laneColors = bottomColors
@@ -1938,11 +1915,11 @@ window.__ModuleLoader__.load({
      * @returns the absolutely positioned line elements.
      */
     function renderDetailLanes(row) {
-      const colors = Array.isArray(row.belowColors) ? row.belowColors : EMPTY_LANE_COLORS
-      return colors.map((colorIndex, lane) => h('span', {
-        key: 'detail-lane-' + lane,
+      const lanes = Array.isArray(row.below) ? row.below : EMPTY_LANES
+      return lanes.map((entry) => h('span', {
+        key: 'detail-lane-' + entry.lane,
         className: 'dsh-git-detailLane',
-        style: { left: (laneX(lane) - 0.75) + 'px', backgroundColor: laneColor(colorIndex) },
+        style: { left: (laneX(entry.lane) - 0.75) + 'px', backgroundColor: laneColor(entry.colorIndex) },
         'aria-hidden': 'true',
       }))
     }
