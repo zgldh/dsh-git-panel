@@ -48,16 +48,16 @@
         ]
       },
       "dist-tags": {
-        "latest": "1.1.1"
+        "latest": "1.2.0"
       },
       "versions": [
         {
-          "version": "1.1.1",
-          "publishTimestamp": 1794991835,
+          "version": "1.2.0",
+          "publishTimestamp": 1794992822,
           "source": {
             "type": "git",
             "url": "https://github.com/zgldh/dsh-git-panel",
-            "commit": "ef0c14be8fcb988aa47f096284ae4706121628ce"
+            "commit": "65902a49f08fdc5d93977d761d3615034b160a92"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.3 <0.3.0"
