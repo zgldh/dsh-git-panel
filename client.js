@@ -431,6 +431,7 @@ window.__ModuleLoader__.load({
 .dsh-git-aiButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-git-aiButton[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-git-aiButton:disabled{opacity:.45;cursor:default}
+.dsh-git-aiGlyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .dsh-git-menu{position:absolute;top:calc(100% + 4px);right:0;display:flex;flex-direction:column;gap:2px;min-width:200px;max-width:min(360px,86vw)}
 .dsh-git-menuItem{display:flex;align-items:center;gap:6px;width:100%;min-width:0;min-height:34px;padding:6px 8px;border:0;border-radius:var(--dsw-radius-md);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}
 .dsh-git-menuItem:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
@@ -3135,7 +3136,7 @@ window.__ModuleLoader__.load({
               title: t('ai.menu'),
               onClick: openAiMenu,
             }, [
-              h('span', { key: 'glyph', 'aria-hidden': 'true' }, sparkGlyph(12)),
+              h('span', { key: 'glyph', className: 'dsh-git-aiGlyph', 'aria-hidden': 'true' }, sparkGlyph(12)),
               h('span', { key: 'text' }, t('ai.action')),
               h('span', {
                 key: 'chevron',
