@@ -310,20 +310,27 @@ function parseRefLine(line) {
 }
 
 /**
- * Read the recent commit history with parents and ref labels for the graph.
+ * Read one page of the recent commit history with parents and ref labels.
+ *
+ * Pagination is by position in the same `--topo-order` walk: the client asks for
+ * the next page with `offset = commits already loaded`, and the Host fetches one
+ * commit beyond the page to report whether older history remains.
  * @param repo - absolute repository root.
- * @param limit - maximum commits; clamped into the configured range.
+ * @param limit - page size; clamped into the configured range.
+ * @param offset - commits to skip from the start of the history.
  * @param config - resolved configuration.
- * @returns the head facts and commits newest first; empty for a repository without commits.
+ * @returns the head facts, the page of commits newest first, and whether older commits remain.
  * @throws when git fails for a reason other than an unborn branch.
  */
-export async function readLog(repo, limit, config) {
+export async function readLog(repo, limit, offset, config) {
   const requested = Number.isInteger(limit) ? limit : config.logLimit
   const count = Math.min(Math.max(requested, 1), config.logLimit)
+  const skip = Number.isInteger(offset) && offset > 0 ? offset : 0
   const format = '%H%x1f%h%x1f%P%x1f%an%x1f%at%x1f%s%x1e'
   // The graph follows the checked-out branch by default: all-refs history can
   // open dozens of lanes on repositories with many remote branches.
-  const args = ['log', '-n', String(count)]
+  const args = ['log', '-n', String(count + 1)]
+  if (skip > 0) args.push('--skip', String(skip))
   if (config.includeAllRefs) args.push('--all')
   args.push('--topo-order', '--no-color', `--pretty=format:${format}`)
   const result = await runGit(repo, args, {
@@ -352,6 +359,8 @@ export async function readLog(repo, limit, config) {
       })
     }
   }
+  const hasMore = commits.length > count
+  if (hasMore) commits.length = count
 
   const { byHash, branch } = await readRefMap(repo, config)
   for (const commit of commits) {
@@ -364,7 +373,7 @@ export async function readLog(repo, limit, config) {
     if (headCommit !== undefined) headCommit.refs = [...headCommit.refs, { name: 'HEAD', kind: 'head' }]
   }
 
-  return { head: { branch, detached: branch === null }, commits }
+  return { head: { branch, detached: branch === null }, commits, hasMore }
 }
 
 /**
@@ -915,7 +924,7 @@ export function createGitService(configInput) {
       case 'commit':
         return await commit(payload.repo, payload.message)
       case 'log':
-        return await readLog(await requireRepository(payload.repo), payload.limit, config)
+        return await readLog(await requireRepository(payload.repo), payload.limit, payload.offset, config)
       case 'branches':
         return await readBranches(await requireRepository(payload.repo), config)
       case 'switch':
@@ -974,7 +983,7 @@ export function createGitService(configInput) {
     stageAll,
     unstageAll,
     commit,
-    log: async (repo, limit) => await readLog(await requireRepository(repo), limit, config),
+    log: async (repo, limit, offset) => await readLog(await requireRepository(repo), limit, offset, config),
     branches: async (repo) => await readBranches(await requireRepository(repo), config),
     switchBranch,
     browse,

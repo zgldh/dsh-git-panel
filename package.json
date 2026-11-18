@@ -1,6 +1,6 @@
 {
   "name": "dsh-git-panel",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "VSCode-style Git view for the DeepSeek Harness Web GUI: source control (stage, commit, diff), a branch-lane commit graph with inline commit details, and AI prompts for merge/review — for every Session's working directory, including nested repositories.",
   "license": "MIT",
   "author": {

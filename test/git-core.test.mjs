@@ -20,6 +20,7 @@ import {
   normalizeConfig,
   normalizeFileArgument,
   parseStatus,
+  readLog,
 } from '../index.js'
 
 let passed = 0
@@ -313,6 +314,35 @@ try {
     const allRefs = await createGitService({ includeAllRefs: true }).log(branchy, 20)
     assert.equal(allRefs.commits.length, 2)
     assert.equal(allRefs.commits.some((commit) => commit.subject === 'side commit'), true)
+  })
+
+  await test('readLog pages through history with offset and reports hasMore', async () => {
+    const paged = initRepo(path.join(workspace, 'paged-log'))
+    for (let index = 2; index <= 5; index += 1) {
+      writeFileSync(path.join(paged, 'file.txt'), `line ${index}\n`)
+      git(paged, ['add', 'file.txt'])
+      git(paged, ['commit', '-m', `commit ${index}`])
+    }
+    const config = normalizeConfig({})
+    const first = await readLog(paged, 2, 0, config)
+    assert.equal(first.commits.length, 2)
+    assert.equal(first.hasMore, true)
+    assert.equal(first.commits[0].subject, 'commit 5')
+    const second = await readLog(paged, 2, 2, config)
+    assert.equal(second.commits.length, 2)
+    assert.equal(second.hasMore, true)
+    const third = await readLog(paged, 2, 4, config)
+    assert.equal(third.commits.length, 1)
+    assert.equal(third.hasMore, false)
+    const hashes = [...first.commits, ...second.commits, ...third.commits].map((commit) => commit.hash)
+    assert.equal(new Set(hashes).size, 5, 'pages must not overlap')
+    const beyond = await readLog(paged, 2, 99, config)
+    assert.equal(beyond.commits.length, 0)
+    assert.equal(beyond.hasMore, false)
+    assert.equal(beyond.head.branch, 'main')
+    const viaService = await createGitService({}).log(paged, 2, 2)
+    assert.equal(viaService.commits.length, 2)
+    assert.equal(viaService.hasMore, true)
   })
 
   await test('a merge commit reports two parents', async () => {

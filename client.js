@@ -31,7 +31,9 @@ window.__ModuleLoader__.load({
       'empty.clean': '没有检测到更改。',
 
       'graph.title': '提交图',
-      'graph.count': '最近 {count} 条提交',
+      'graph.count': '已加载 {count} 条提交',
+      'graph.loadingMore': '正在加载更多提交…',
+      'graph.moreError': '加载更多提交失败',
       'graph.branch': '本地分支',
       'graph.remote': '远程分支',
       'graph.tag': '标签',
@@ -60,6 +62,7 @@ window.__ModuleLoader__.load({
       'review.wrapAria': '自动换行',
       'commitDiff.title': '提交文件变更',
       'commitDiff.missing': '缺少打开这个 diff 的参数。',
+      'commitDiff.stale': '这个标签页由旧版本打开，请从提交详情里重新点击文件。',
 
       'toolbar.refresh': '刷新',
       'toolbar.busy': '正在更新…',
@@ -172,7 +175,9 @@ window.__ModuleLoader__.load({
       'empty.clean': 'No changes detected.',
 
       'graph.title': 'Commit graph',
-      'graph.count': '{count} recent commits',
+      'graph.count': '{count} commits loaded',
+      'graph.loadingMore': 'Loading more commits…',
+      'graph.moreError': 'Failed to load more commits',
       'graph.branch': 'Branch',
       'graph.remote': 'Remote',
       'graph.tag': 'Tag',
@@ -201,6 +206,7 @@ window.__ModuleLoader__.load({
       'review.wrapAria': 'Line wrap',
       'commitDiff.title': 'Commit file changes',
       'commitDiff.missing': 'Missing parameters for this diff.',
+      'commitDiff.stale': 'This tab was opened by an older version; click the file in the commit detail again.',
 
       'toolbar.refresh': 'Refresh',
       'toolbar.busy': 'Updating…',
@@ -554,6 +560,7 @@ window.__ModuleLoader__.load({
 .dsh-git-graphArea{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .dsh-git-graphScroll{flex:1;min-height:0;overflow:auto;padding-bottom:calc(var(--dsh-composer-height, 152px) + 16px);scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent) transparent}
 .dsh-git-graphList{display:flex;flex-direction:column;padding:2px 0}
+.dsh-git-graphMore{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:11px;line-height:18px;color:var(--dsh-git-faint)}
 .dsh-git-colHandles{position:absolute;top:0;bottom:0;left:0;pointer-events:none;z-index:3}
 .dsh-git-colHandle{position:absolute;top:0;bottom:0;width:6px;pointer-events:auto;cursor:col-resize}
 .dsh-git-colHandle::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:1px;transform:translateX(-50%);background:transparent}
@@ -907,12 +914,12 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Normalize the Host commit list payload.
+     * Normalize the Host commit page payload.
      * @param value - raw `log` value.
-     * @returns the commits that carry a hash.
+     * @returns the commits that carry a hash, and whether older commits remain.
      */
-    function normalizeCommits(value) {
-      if (!value || !Array.isArray(value.commits)) return EMPTY_COMMITS
+    function normalizeLog(value) {
+      if (!value || !Array.isArray(value.commits)) return { commits: EMPTY_COMMITS, hasMore: false }
       const commits = []
       for (let index = 0; index < value.commits.length; index += 1) {
         const commit = value.commits[index]
@@ -920,7 +927,7 @@ window.__ModuleLoader__.load({
         if (typeof commit.hash !== 'string' || commit.hash === '') continue
         commits.push(commit)
       }
-      return commits
+      return { commits, hasMore: value.hasMore === true }
     }
 
     /**
@@ -2034,26 +2041,68 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Read the navigation parameters of the commit-diff right-Sidebar tab.
-     * @param useTabInfo - the tab's framework-bound information hook.
-     * @returns the target repository, commit, path, and display copy, each defaulted.
+     * Build the right-Sidebar address of one commit file's diff.
+     *
+     * A resource address is the tab's whole identity: it is what deduplicates
+     * opens and what lets the tab restore after a reload, since navigation
+     * parameters are not persisted with the layout.
+     * @param repo - absolute repository path.
+     * @param hash - full commit hash.
+     * @param path - repository-relative file path.
+     * @returns the `dsh-resource://git-commit-diff/…` address.
      */
-    function readCommitDiffParams(useTabInfo) {
+    function commitDiffAddress(repo, hash, path) {
+      const segments = String(path).split('/').map((segment) => encodeURIComponent(segment))
+      return 'dsh-resource://git-commit-diff/' + encodeURIComponent(repo) + '/' + encodeURIComponent(hash) + '/' + segments.join('/')
+    }
+
+    /**
+     * Read the target back out of a commit-file diff address.
+     * @param address - the tab's address.
+     * @returns the repository, commit, file path, and whether the address uses this type's shape.
+     */
+    function parseCommitDiffAddress(address) {
+      const text = typeof address === 'string' ? address : ''
+      const prefix = 'dsh-resource://git-commit-diff/'
+      if (text.slice(0, prefix.length) !== prefix) return { repo: '', hash: '', path: '', recognized: false }
+      const segments = text.slice(prefix.length).split('/')
+      const decode = (value) => {
+        try {
+          return decodeURIComponent(value)
+        } catch {
+          return ''
+        }
+      }
+      return {
+        repo: segments.length > 0 ? decode(segments[0]) : '',
+        hash: segments.length > 1 ? decode(segments[1]) : '',
+        path: segments.length > 2 ? segments.slice(2).map(decode).join('/') : '',
+        recognized: true,
+      }
+    }
+
+    /**
+     * Read the target of the commit-diff tab from its persistent address.
+     * @param useTabInfo - the tab's framework-bound information hook.
+     * @returns the repository, commit, path, and display copy.
+     */
+    function readCommitDiffTarget(useTabInfo) {
       const info = typeof useTabInfo === 'function' ? useTabInfo() : null
       const tab = info !== null && info !== undefined && typeof info === 'object' ? info.tab : null
       const navigation = tab !== null && tab !== undefined && typeof tab === 'object' ? tab.navigation : null
-      const params = navigation !== null && navigation !== undefined && typeof navigation === 'object' && navigation.params !== null && typeof navigation.params === 'object'
-        ? navigation.params
-        : {}
+      const address = navigation !== null && navigation !== undefined && typeof navigation === 'object' && typeof navigation.address === 'string'
+        ? navigation.address
+        : (tab !== null && tab !== undefined && typeof tab === 'object' && typeof tab.contentId === 'string' ? tab.contentId : '')
+      const target = parseCommitDiffAddress(address)
+      const revision = navigation !== null && navigation !== undefined && typeof navigation === 'object' && Number.isFinite(navigation.revision)
+        ? navigation.revision
+        : 0
       return {
-        repo: typeof params.repo === 'string' ? params.repo : '',
-        hash: typeof params.hash === 'string' ? params.hash : '',
-        path: typeof params.path === 'string' ? params.path : '',
-        short: typeof params.short === 'string' ? params.short : '',
-        subject: typeof params.subject === 'string' ? params.subject : '',
-        revision: navigation !== null && navigation !== undefined && typeof navigation === 'object' && Number.isFinite(navigation.revision)
-          ? navigation.revision
-          : 0,
+        repo: target.repo,
+        hash: target.hash,
+        path: target.path,
+        recognized: target.recognized,
+        revision,
       }
     }
 
@@ -2474,7 +2523,7 @@ window.__ModuleLoader__.load({
      */
     function CommitDiffTab(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackTranslate
-      const target = readCommitDiffParams(props.useTabInfo)
+      const target = readCommitDiffTarget(props.useTabInfo)
       const loadDiffRef = useRef(props.loadCommitDiff)
       loadDiffRef.current = props.loadCommitDiff
       const translateRef = useRef(t)
@@ -2485,7 +2534,8 @@ window.__ModuleLoader__.load({
 
       useEffect(() => {
         if (target.repo === '' || target.hash === '' || target.path === '') {
-          setState({ phase: 'error', data: null, error: translateRef.current('commitDiff.missing') })
+          const key = target.recognized === false ? 'commitDiff.stale' : 'commitDiff.missing'
+          setState({ phase: 'error', data: null, error: translateRef.current(key) })
           return undefined
         }
         const controller = new AbortController()
@@ -2506,7 +2556,7 @@ window.__ModuleLoader__.load({
           },
         )
         return () => { controller.abort() }
-      }, [target.repo, target.hash, target.path, target.revision, attempt])
+      }, [target.repo, target.hash, target.path, target.recognized, target.revision, attempt])
 
       const togglePref = (key) => {
         setPrefs((current) => {
@@ -2577,10 +2627,9 @@ window.__ModuleLoader__.load({
           h('span', { key: 'spacer', className: 'dsh-git-sidebarTabSpacer' }),
           ...tools,
         ]),
-        target.subject === ''
+        target.hash === ''
           ? null
-          : h('p', { key: 'meta', className: 'dsh-git-sidebarTabMeta' },
-            (target.short !== '' ? target.short : shortOf(target.hash)) + ' · ' + target.subject),
+          : h('p', { key: 'meta', className: 'dsh-git-sidebarTabMeta' }, shortOf(target.hash)),
       ]
       if (state.phase === 'idle' || state.phase === 'loading') {
         children.push(h('p', { key: 'loading', className: 'dsh-git-diffStatus', role: 'status' }, t('diff.loading')))
@@ -2622,7 +2671,7 @@ window.__ModuleLoader__.load({
      */
     function CommitDiffTitle(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackTranslate
-      const target = readCommitDiffParams(props.useTabInfo)
+      const target = readCommitDiffTarget(props.useTabInfo)
       const name = splitPath(target.path).name
       if (name === '') return h('span', { key: 'title', className: 'dsh-git-tabLabel' }, t('commitDiff.title'))
       return h('span', { key: 'title', className: 'dsh-git-diffTitle' }, [
@@ -2727,6 +2776,9 @@ window.__ModuleLoader__.load({
       const [commits, setCommits] = useState(EMPTY_COMMITS)
       const [logPhase, setLogPhase] = useState('idle')
       const [logError, setLogError] = useState(null)
+      const [logHasMore, setLogHasMore] = useState(false)
+      const [logMorePhase, setLogMorePhase] = useState('idle')
+      const [logMoreError, setLogMoreError] = useState(null)
       const [busy, setBusy] = useState(false)
       const [committing, setCommitting] = useState(false)
       const [refreshing, setRefreshing] = useState(false)
@@ -2774,6 +2826,11 @@ window.__ModuleLoader__.load({
       const refreshingRef = useRef(false)
       const loadAbortRef = useRef(null)
       const logAbortRef = useRef(null)
+      const logMoreAbortRef = useRef(null)
+      const logMoreBusyRef = useRef(false)
+      const logPhaseRef = useRef('idle')
+      const logHasMoreRef = useRef(false)
+      const commitsRef = useRef(EMPTY_COMMITS)
       const diffAbortRef = useRef(null)
       const refreshAbortRef = useRef(null)
       const detailAbortRef = useRef(null)
@@ -2804,6 +2861,18 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         cwdRef.current = repository
       }, [repository])
+
+      useEffect(() => {
+        logPhaseRef.current = logPhase
+      }, [logPhase])
+
+      useEffect(() => {
+        logHasMoreRef.current = logHasMore
+      }, [logHasMore])
+
+      useEffect(() => {
+        commitsRef.current = commits
+      }, [commits])
 
       useEffect(() => {
         graphWidthRef.current = graphWidth
@@ -3091,6 +3160,14 @@ window.__ModuleLoader__.load({
         setCommits(EMPTY_COMMITS)
         setLogPhase('loading')
         setLogError(null)
+        setLogHasMore(false)
+        setLogMorePhase('idle')
+        setLogMoreError(null)
+        logMoreBusyRef.current = false
+        if (logMoreAbortRef.current !== null) {
+          logMoreAbortRef.current.abort()
+          logMoreAbortRef.current = null
+        }
         const settle = (promise) => promise.then(
           (value) => ({ ok: true, value }),
           (failure) => ({ ok: false, error: failure }),
@@ -3133,12 +3210,15 @@ window.__ModuleLoader__.load({
         }
         const logResult = results[2]
         if (logResult.ok) {
-          setCommits(normalizeCommits(logResult.value))
+          const page = normalizeLog(logResult.value)
+          setCommits(page.commits)
+          setLogHasMore(page.hasMore)
           setLogPhase('ready')
         } else if (isAbort(logResult.error)) {
           setLogPhase('idle')
         } else {
           setCommits(EMPTY_COMMITS)
+          setLogHasMore(false)
           setLogPhase('error')
           setLogError(messageOf(logResult.error, translateRef.current))
         }
@@ -3150,10 +3230,20 @@ window.__ModuleLoader__.load({
         logAbortRef.current = controller
         setLogPhase('loading')
         setLogError(null)
+        setLogHasMore(false)
+        setLogMorePhase('idle')
+        setLogMoreError(null)
+        logMoreBusyRef.current = false
+        if (logMoreAbortRef.current !== null) {
+          logMoreAbortRef.current.abort()
+          logMoreAbortRef.current = null
+        }
         try {
           const value = await invoke('log', { repo, limit: LOG_LIMIT }, controller.signal)
           if (controller.signal.aborted || cwdRef.current !== repo) return
-          setCommits(normalizeCommits(value))
+          const page = normalizeLog(value)
+          setCommits(page.commits)
+          setLogHasMore(page.hasMore)
           setLogPhase('ready')
         } catch (failure) {
           if (isAbort(failure) || controller.signal.aborted) return
@@ -3161,6 +3251,48 @@ window.__ModuleLoader__.load({
           setLogError(messageOf(failure, translateRef.current))
         } finally {
           if (logAbortRef.current === controller) logAbortRef.current = null
+        }
+      }, [invoke])
+
+      /** Append the next page of commits when the graph is scrolled to its bottom. */
+      const loadMoreLog = useCallback(async () => {
+        const repo = cwdRef.current
+        if (repo === null || logMoreBusyRef.current || !logHasMoreRef.current) return
+        if (logPhaseRef.current !== 'ready') return
+        logMoreBusyRef.current = true
+        if (logMoreAbortRef.current !== null) logMoreAbortRef.current.abort()
+        const controller = new AbortController()
+        logMoreAbortRef.current = controller
+        setLogMorePhase('loading')
+        setLogMoreError(null)
+        try {
+          const value = await invoke('log', {
+            repo,
+            limit: LOG_LIMIT,
+            offset: commitsRef.current.length,
+          }, controller.signal)
+          if (controller.signal.aborted || cwdRef.current !== repo) return
+          const page = normalizeLog(value)
+          const known = new Set()
+          for (let index = 0; index < commitsRef.current.length; index += 1) {
+            known.add(commitsRef.current[index].hash)
+          }
+          const appended = []
+          for (let index = 0; index < page.commits.length; index += 1) {
+            const commit = page.commits[index]
+            if (known.has(commit.hash)) continue
+            appended.push(commit)
+          }
+          if (appended.length > 0) setCommits((current) => current.concat(appended))
+          setLogHasMore(page.hasMore && appended.length > 0)
+          setLogMorePhase('idle')
+        } catch (failure) {
+          if (isAbort(failure) || controller.signal.aborted) return
+          setLogMorePhase('error')
+          setLogMoreError(messageOf(failure, translateRef.current))
+        } finally {
+          if (logMoreAbortRef.current === controller) logMoreAbortRef.current = null
+          logMoreBusyRef.current = false
         }
       }, [invoke])
 
@@ -3414,6 +3546,13 @@ window.__ModuleLoader__.load({
         if (repository === null || refreshingRef.current || busyRef.current) return
         refreshingRef.current = true
         setRefreshing(true)
+        setLogMorePhase('idle')
+        setLogMoreError(null)
+        logMoreBusyRef.current = false
+        if (logMoreAbortRef.current !== null) {
+          logMoreAbortRef.current.abort()
+          logMoreAbortRef.current = null
+        }
         if (refreshAbortRef.current !== null) refreshAbortRef.current.abort()
         const controller = new AbortController()
         refreshAbortRef.current = controller
@@ -3449,9 +3588,12 @@ window.__ModuleLoader__.load({
           setPhase('ready')
           if (results[1].ok) setBranches(normalizeBranches(results[1].value))
           if (results[2].ok) {
-            setCommits(normalizeCommits(results[2].value))
+            const page = normalizeLog(results[2].value)
+            setCommits(page.commits)
+            setLogHasMore(page.hasMore)
             setLogPhase('ready')
           } else if (!isAbort(results[2].error)) {
+            setLogHasMore(false)
             setLogPhase('error')
             setLogError(messageOf(results[2].error, translateRef.current))
           }
@@ -4165,13 +4307,7 @@ window.__ModuleLoader__.load({
                   refColor: row.dot.colorIndex,
                   onOpenFile: openCommitDiff === null ? null : (path) => {
                     if (repository === null) return
-                    openCommitDiff({
-                      repo: repository,
-                      hash,
-                      short: typeof commit.short === 'string' ? commit.short : shortOf(hash),
-                      subject: typeof commit.subject === 'string' ? commit.subject : '',
-                      path,
-                    })
+                    openCommitDiff({ repo: repository, hash, path })
                   },
                   onCopy: (value) => { void copyHash(value) },
                   onRetry: retryCommitDetail,
@@ -4189,18 +4325,39 @@ window.__ModuleLoader__.load({
               : null,
           ]))
         }
+        const footer = []
+        if (logMorePhase === 'loading') {
+          footer.push(h('div', { key: 'more-loading', className: 'dsh-git-graphMore', role: 'status' }, [
+            h('span', { key: 'spin', className: 'dsh-git-spinner', 'aria-hidden': 'true' }),
+            h('span', { key: 'text' }, t('graph.loadingMore')),
+          ]))
+        } else if (logMorePhase === 'error') {
+          footer.push(h('div', { key: 'more-error', className: 'dsh-git-graphMore' }, [
+            h('span', { key: 'text', className: 'dsh-git-errorText' }, logMoreError === null ? t('graph.moreError') : logMoreError),
+            h('button', {
+              key: 'retry',
+              type: 'button',
+              className: 'dsh-git-miniButton',
+              onClick: () => { void loadMoreLog() },
+            }, t('state.retry')),
+          ]))
+        }
         return h('div', { key: 'area', className: 'dsh-git-graphArea' }, [
           h('div', {
             key: 'list',
             className: 'dsh-git-graphScroll',
             ref: listRef,
-            onScroll: (event) => { scrollMemoryRef.current.graph = event.currentTarget.scrollTop },
+            onScroll: (event) => {
+              const node = event.currentTarget
+              scrollMemoryRef.current.graph = node.scrollTop
+              if (node.scrollTop + node.clientHeight >= node.scrollHeight - 160) void loadMoreLog()
+            },
           }, h('div', {
             key: 'rows',
             className: 'dsh-git-graphList',
             role: 'list',
             'aria-label': t('graph.title'),
-          }, items)),
+          }, items.concat(footer))),
           renderColumnHandles({
             columns,
             dragging: columnDrag === null ? null : columnDrag.kind,
@@ -4322,12 +4479,19 @@ window.__ModuleLoader__.load({
         const callHost = (action, params, signal) => postGitAction(action, params, signal, t)
         const loadCommitDiff = (params, signal) => callHost('commitDiff', params, signal)
 
-        // Commit-file diffs are a right-Sidebar tab type of this bundle: a page
-        // kind, so opening another file navigates the one tab instead of stacking.
+        // Commit-file diffs are a right-Sidebar resource type of this bundle: the
+        // address names the repository, commit, and file, so the tab deduplicates
+        // opens and restores after a page reload.
         ctx.effect(() => ctx.sidebarRightTabs.register({
           id: COMMIT_DIFF_TAB_ID,
           kind: COMMIT_DIFF_KIND,
-          title: () => t('commitDiff.title'),
+          patterns: ['dsh-resource://git-commit-diff/[\\s\\S]+'],
+          priority: 'extension',
+          title: (address) => {
+            const target = parseCommitDiffAddress(address)
+            const name = splitPath(target.path).name
+            return name === '' ? t('commitDiff.title') : name
+          },
         }), 'git-panel: commit diff tab type')
         ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
           name: 'sidebar.right.pane.tab',
@@ -4349,7 +4513,12 @@ window.__ModuleLoader__.load({
           label: () => t('view.label'),
           inject: () => ({
             call: callHost,
-            openCommitDiff: (params) => { ctx.sidebarRight.openTab(COMMIT_DIFF_KIND, { params }) },
+            openCommitDiff: (params) => {
+              ctx.sidebarRight.openResource(
+                commitDiffAddress(params.repo, params.hash, params.path),
+                { kind: COMMIT_DIFF_KIND },
+              )
+            },
           }),
         }, GitView))
       },

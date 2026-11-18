@@ -114,7 +114,7 @@ await test('the Client module registers the Git view and its commit-diff Sidebar
   assert.match(source, /sidebar\.right\.pane\.tab/)
   assert.match(source, /git-commit-diff/)
   assert.match(source, /sidebarRightTabs\.register/)
-  assert.match(source, /ctx\.sidebarRight\.openTab/)
+  assert.match(source, /ctx\.sidebarRight\.openResource/)
   assert.doesNotMatch(source, /sidebar\.panellist/, 'the Git view must not register a sidebar panel icon')
   assert.doesNotMatch(source, /name: 'main',\s*\n?\s*key:/, 'the Git view must not register a main panel')
   assert.match(source, /api\/git-ui/)

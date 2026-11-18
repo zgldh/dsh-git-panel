@@ -7,9 +7,9 @@ A VSCode-style Git view for the [DeepSeek Harness](https://github.com/deepseek-a
 ## Features
 
 - **Source control** — staged and changed file groups, per-file and whole-group stage/unstage, commit message with `Ctrl/Cmd+Enter`, branch switch, ahead/behind counts, refresh, and a unified diff view.
-- **Commit graph** — newest commits with branch lanes that never move sideways: a line keeps its column for its whole life and stays straight vertical, merges and joins are short diagonals into the column they link to, and a new branch takes the leftmost free column (or a new right-hand column), so starting a branch never shoves an existing line. That means a freed column can stay empty until a new branch fills it — the same behaviour as the VS Code graph. A lane keeps its colour for the whole branch line instead of changing at merge points, and branch/tag labels take the colour of the commit's lane. Branch refs collapse to the current branch plus a `+N` badge; the full list is in the commit detail.
+- **Commit graph** — newest commits with branch lanes that never move sideways: a line keeps its column for its whole life and stays straight vertical, merges and joins are short diagonals into the column they link to, and a new branch takes the leftmost free column (or a new right-hand column), so starting a branch never shoves an existing line. That means a freed column can stay empty until a new branch fills it — the same behaviour as the VS Code graph. Scrolling to the bottom loads the next page of older commits automatically, so a long history keeps extending without a separate "load more" click. A lane keeps its colour for the whole branch line instead of changing at merge points, and branch/tag labels take the colour of the commit's lane. Branch refs collapse to the current branch plus a `+N` badge; the full list is in the commit detail.
 - **Inline commit details** — click a commit to expand it below the row: author, full local date and time (`toLocaleString`), full hash (copy button), parents, refs, changed files with `+N −M`, and clicking a file opens its diff in the right Sidebar (falling back to an inline patch when that column is unavailable). One commit and one file expand at a time; the graph lanes keep running beside the expanded block, so a line never breaks at a detail.
-- **Right-Sidebar diff tab** — a commit file's diff opens as a tab of its own, with the Harness review tab's presentation: syntax highlighting, old/new line numbers, add/delete gutters, hunk headers, and split/unified plus line-wrap toggles that persist. Opening another file navigates the same tab instead of stacking duplicates.
+- **Right-Sidebar diff tab** — a commit file's diff opens as a tab of its own, with the Harness review tab's presentation: syntax highlighting, old/new line numbers, add/delete gutters, hunk headers, and split/unified plus line-wrap toggles that persist. The tab address names the repository, commit, and file, so reopening the same file reveals the same tab, another file opens its own, and the tab restores with its content after a page reload.
 - **Aligned, resizable columns** — the author/time columns are aligned across rows and can be dragged (invisible 6 px hotspots, double-click resets); widths persist locally.
 - **Resizable split** — the 1 px divider between the panes is always visible, highlights on hover, drags between 160 px and 70 % of the view, and resets on double-click.
 - **Cascading repository picker** — choose the Session working directory, the repository root, or drill into one directory level at a time; a level is probed only when you expand it, so opening the menu never scans a whole tree (build/dependency directories are skipped).
@@ -55,7 +55,7 @@ Edit the `git-panel` row in your profile patch (or the bundle's `cordis.patch.ym
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `logLimit` | `80` | Commits requested and drawn (10–300). |
+| `logLimit` | `80` | Commits requested per history page and drawn at first load (10–300). |
 | `commitFilesLimit` | `500` | Files listed in a commit detail (50–5000). |
 | `includeAllRefs` | `false` | Draw all branches (`git log --all`). Keep `false` for a narrow graph on busy repositories. |
 | `browseLimit` | `200` | Maximum subdirectories listed per cascading picker level (1–10000). |
@@ -70,7 +70,8 @@ Edit the `git-panel` row in your profile patch (or the bundle's `cordis.patch.ym
 - **Host half** `index.js` registers one authenticated POST route `/api/git-ui` on the shared `/api` surface. It resolves a requested directory to its repository root with `git -C <dir> rev-parse --show-toplevel`, probes one picker level with a single `readdir` per child directory (no recursion), runs Git with an argument array (never a shell), validates repository-relative paths, and returns JSON envelopes.
 - **Client half** `client.js` is a browser module loaded through the Harness client module loader. It registers the `conversation.view` slot (`id: 'git'`, order 20), reads the Session's working directory from the Session/Workspace snapshots, and renders the view with React (no build step, no JSX).
 - **Composer overlay** — the view root carries `data-conversation-composer-overlay`, the Harness conversation-shell contract that makes a view full-height, hides the chat column's width handles, and floats the composer over it (the same contract the built-in Trajectory view declares). The three scrolling lists reserve the composer's live height so their last row stays reachable.
-- **Right-Sidebar tab type** — the commit-file diff is a page type registered through the public extension points (`ctx.sidebarRightTabs.register`, the keyed `sidebar.right.pane.tab` and `sidebar.right.pane.tab.title` seats, opened with `ctx.sidebarRight.openTab`). The body reads its target from `navigation.params`, renders with the shared `@deepseek-ai/dsh-client-ui-primitives` icons, tooltips and code highlighter, and mirrors the review tab's comparison layout, colours, and line-numbering so both surfaces read the same.
+- **Commit history paging** — the Host's `log` action takes a page size and an offset, walks the same `--topo-order` sequence, and fetches one commit beyond the page to report `hasMore`. The Client appends the next page when the commit list is scrolled near its bottom, so the graph grows without re-requesting what it already has.
+- **Right-Sidebar diff tab type** — the commit-file diff is a resource type registered through the public extension points (`ctx.sidebarRightTabs.register` with a `dsh-resource://git-commit-diff/…` pattern, the keyed `sidebar.right.pane.tab` and `sidebar.right.pane.tab.title` seats, opened with `ctx.sidebarRight.openResource`). The address encodes repository, commit, and file, so it is the tab identity and survives a reload; the body renders with the shared `@deepseek-ai/dsh-client-ui-primitives` icons, tooltips and code highlighter, and mirrors the review tab's comparison layout, colours, and line-numbering so both surfaces read the same.
 
 ## Limitations
 
@@ -107,9 +108,9 @@ DeepSeek Harness（DSH）Web GUI 的 VSCode 风格 Git 视图。它作为会话�
 ### 功能
 
 - **源代码管理**：已暂存/更改两组文件、单文件和整组暂存/取消暂存、提交信息（`Ctrl/Cmd+Enter` 提交）、分支切换、领先/落后提交数、刷新、文件 diff。
-- **提交图**：分支泳道不会左右移动——每条线在生命周期内固定在自己的列、保持竖直，合并/汇入只画一小段斜线连到目标列，新分支优先占用最左边的空列（没有空列才在最右侧新开一列），所以开新分支不会把已有线挤开。代价是一条线结束后的空列可能暂时空着，直到新分支来填——和 VS Code 的提交图行为一致。分支泳道颜色跟着分支线走，合并点前后同色，分支名/标签名用所在泳道线的颜色做底色；分支标签压缩成当前分支加 `+N`，完整列表在提交详情里。
+- **提交图**：分支泳道不会左右移动——每条线在生命周期内固定在自己的列、保持竖直，合并/汇入只画一小段斜线连到目标列，新分支优先占用最左边的空列（没有空列才在最右侧新开一列），所以开新分支不会把已有线挤开。代价是一条线结束后的空列可能暂时空着，直到新分支来填——和 VS Code 的提交图行为一致。滚动到最底部会自动加载下一页更早的提交，长历史不需要手动点“加载更多”。分支泳道颜色跟着分支线走，合并点前后同色，分支名/标签名用所在泳道线的颜色做底色；分支标签压缩成当前分支加 `+N`，完整列表在提交详情里。
 - **行内提交详情**：点提交行在下方展开——作者、完整本地时间（`toLocaleString`）、完整 hash（可复制）、父提交、refs、改动文件；点击某个文件会在右侧边栏打开它的 diff（右侧栏不可用时退回行内 patch）。同时只展开一个提交、一个文件；展开区左侧保持轨道线连续，连线不会在详情处断开。
-- **右侧栏 diff 标签页**：提交里的文件 diff 以独立标签页打开，表现与 Harness 的变更评审一致：语法高亮、旧/新行号、增删底色与行号边标、hunk 头，以及「左右对比/单栏对比」和「自动换行」两个开关（选择会记住）。再点别的文件是在同一个标签页内切换，不会堆出一排重复标签。
+- **右侧栏 diff 标签页**：提交里的文件 diff 以独立标签页打开，表现与 Harness 的变更评审一致：语法高亮、旧/新行号、增删底色与行号边标、hunk 头，以及「左右对比/单栏对比」和「自动换行」两个开关（选择会记住）。标签页地址里编码了仓库、提交和文件路径，所以再次打开同一个文件是同一个标签页、打开别的文件是新标签页，刷新页面后标签页也能带着内容恢复。
 - **列对齐与可拖列宽**：作者/时间列统一对齐，列边界有 6px 隐形热区可拖动，双击复位，宽度记在本地。
 - **可拖分栏**：左右分栏之间 1px 细线常显，悬停高亮，拖动范围 160px–视图 70%，双击复位。
 - **级联仓库选择**：会话工作目录、仓库根目录，以及逐层下钻的目录；只有展开某一层时才探测该层，打开菜单不会扫整棵树（跳过构建/依赖目录）。
@@ -166,7 +167,8 @@ dsh plugin --profile web add link:/path/to/dsh-git-panel
 - **Host 半** `index.js`：在共享 `/api` 上注册一条登录保护的 `POST /api/git-ui` 路由；用 `git -C <dir> rev-parse --show-toplevel` 把目录解析为仓库根目录；选择器每层只做一次 `readdir`（每个子目录一次，不递归）；Git 以参数数组执行、不经过 shell；校验仓库内相对路径；返回 JSON。
 - **Client 半** `client.js`：通过 Harness 客户端模块加载器加载的浏览器模块，注册 `conversation.view`（`id: 'git'`，order 20），从 Session/Workspace 快照读工作目录，用 React 渲染（无构建、无 JSX）。
 - **Composer overlay**：视图根节点带 `data-conversation-composer-overlay`，这是 Harness 会话外壳的约定：视图占满整列、隐藏聊天列两侧的宽度拖拽线、输入框浮在视图上（内置「轨迹」用的是同一个约定）。三个滚动列表按输入框的实时高度留出底部空间，最后一行仍然够得到。
-- **右侧栏标签页类型**：提交文件 diff 是一个通过公开扩展点注册的页面类型（`ctx.sidebarRightTabs.register`、keyed 槽 `sidebar.right.pane.tab` 与 `sidebar.right.pane.tab.title`，用 `ctx.sidebarRight.openTab` 打开）。body 从 `navigation.params` 取目标，用共享的 `@deepseek-ai/dsh-client-ui-primitives` 里的图标、Tooltip 和代码高亮渲染，并照搬评审标签页的对比布局、配色和行号规则，两处观感一致。
+- **提交历史分页**：Host 的 `log` 动作接收「每页条数」和「偏移量」，在同一个 `--topo-order` 序列上取下一页，并多取一条用于报告 `hasMore`；Client 在提交列表滚动到接近底部时自动追加下一页，不会重复请求已加载的部分。
+- **右侧栏标签页类型**：提交文件 diff 是一个通过公开扩展点注册的资源类型（`ctx.sidebarRightTabs.register` + 匹配 `dsh-resource://git-commit-diff/…` 的模式、keyed 槽 `sidebar.right.pane.tab` 与 `sidebar.right.pane.tab.title`，用 `ctx.sidebarRight.openResource` 打开）。地址里编码了仓库、提交和文件，所以它既是标签页身份，也能在刷新后恢复；body 用共享的 `@deepseek-ai/dsh-client-ui-primitives` 里的图标、Tooltip 和代码高亮渲染，并照搬评审标签页的对比布局、配色和行号规则，两处观感一致。
 
 ### 限制
 
