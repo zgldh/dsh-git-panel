@@ -11,6 +11,23 @@ moved or reshaped behaviour under `Changed`, corrected behaviour under `Fixed`.
 
 - Nothing yet.
 
+## 2.0.0
+
+### Changed
+
+- The commit graph defaults to every ref (local branches, remote-tracking
+  branches, tags) instead of the checked-out branch alone.
+- The branch dropdown is now a graph filter: `全部` or one branch, grouped into
+  main / development / other local branches / remote-tracking branches, with a
+  case-insensitive fuzzy search field. Choosing a branch only changes the graph;
+  the arrow on a local row is the explicit "switch to this branch" action.
+- The selector remembers its scope per Session, resets to `全部` when the
+  repository changes, and falls back to `全部` when the chosen branch disappears.
+
+### Removed
+
+- The `includeAllRefs` configuration key; the branch selector replaces it.
+
 ## 1.4.3
 
 ### Added

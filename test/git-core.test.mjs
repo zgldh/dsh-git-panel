@@ -76,7 +76,6 @@ try {
     const config = normalizeConfig({})
     assert.equal(config.logLimit, 80)
     assert.equal(config.signCommits, false)
-    assert.equal(config.includeAllRefs, false)
     assert.equal(config.browseLimit, 200)
     assert.ok(config.skipDirectories.includes('node_modules'))
     assert.deepEqual(config.allowRoots, [])
@@ -299,7 +298,7 @@ try {
     assert.equal(refs.some((ref) => ref.name === 'origin'), false, 'the symbolic origin/HEAD pseudo-ref must not be listed')
   })
 
-  await test('the log follows the checked-out branch unless includeAllRefs is set', async () => {
+  await test('the log shows every ref by default and one branch when scoped', async () => {
     const branchy = initRepo(path.join(workspace, 'branchy'))
     git(branchy, ['switch', '-c', 'side'])
     writeFileSync(path.join(branchy, 'side.txt'), 'side\n')
@@ -307,13 +306,21 @@ try {
     git(branchy, ['commit', '-m', 'side commit'])
     git(branchy, ['switch', 'main'])
 
-    const headOnly = await createGitService({}).log(branchy, 20)
-    assert.equal(headOnly.commits.length, 1)
-    assert.equal(headOnly.commits[0].subject, 'initial commit')
-
-    const allRefs = await createGitService({ includeAllRefs: true }).log(branchy, 20)
+    const allRefs = await createGitService({}).log(branchy, 20)
     assert.equal(allRefs.commits.length, 2)
     assert.equal(allRefs.commits.some((commit) => commit.subject === 'side commit'), true)
+
+    const mainOnly = await createGitService({}).log(branchy, 20, 0, 'main')
+    assert.equal(mainOnly.commits.length, 1)
+    assert.equal(mainOnly.commits[0].subject, 'initial commit')
+
+    const sideOnly = await createGitService({}).log(branchy, 20, 0, 'side')
+    assert.equal(sideOnly.commits.length, 2)
+    await assert.rejects(
+      () => createGitService({}).log(branchy, 20, 0, 'missing-branch'),
+      /No branch or remote-tracking ref named missing-branch/,
+    )
+    await assert.rejects(() => createGitService({}).log(branchy, 20, 0, '--all'), /must be a branch/)
   })
 
   await test('readLog pages through history with offset and reports hasMore', async () => {
@@ -343,6 +350,12 @@ try {
     const viaService = await createGitService({}).log(paged, 2, 2)
     assert.equal(viaService.commits.length, 2)
     assert.equal(viaService.hasMore, true)
+    const scopedFirst = await readLog(paged, 2, 0, config, 'main')
+    assert.equal(scopedFirst.commits.length, 2)
+    assert.equal(scopedFirst.commits[0].subject, 'commit 5')
+    const scopedSecond = await readLog(paged, 2, 2, config, 'main')
+    assert.equal(scopedSecond.commits.length, 2)
+    assert.equal(scopedSecond.hasMore, true)
   })
 
   await test('a merge commit reports two parents', async () => {
@@ -395,6 +408,7 @@ try {
   await test('branches lists local branches and switch changes the current one', async () => {
     const listed = await service.branches(repo)
     assert.deepEqual(listed.locals.sort(), ['feature', 'main'].sort())
+    assert.deepEqual(listed.remotes, ['origin/main'])
     assert.equal(listed.current, 'main')
 
     const switched = await service.switchBranch(repo, 'feature')

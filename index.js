@@ -57,7 +57,6 @@ const DEFAULT_CONFIG = {
   logLimit: 80,
   commitFilesLimit: 500,
   signCommits: false,
-  includeAllRefs: false,
   allowRoots: [],
   browseLimit: 200,
   skipDirectories: DEFAULT_SKIP_DIRECTORIES,
@@ -115,7 +114,6 @@ export function normalizeConfig(input) {
     logLimit: readConfigField(source, 'logLimit', DEFAULT_CONFIG.logLimit, isInteger(10, 300), 'an integer between 10 and 300'),
     commitFilesLimit: readConfigField(source, 'commitFilesLimit', DEFAULT_CONFIG.commitFilesLimit, isInteger(50, 5000), 'an integer between 50 and 5000'),
     signCommits: readConfigField(source, 'signCommits', DEFAULT_CONFIG.signCommits, (value) => typeof value === 'boolean', 'a boolean'),
-    includeAllRefs: readConfigField(source, 'includeAllRefs', DEFAULT_CONFIG.includeAllRefs, (value) => typeof value === 'boolean', 'a boolean'),
     browseLimit: readConfigField(source, 'browseLimit', DEFAULT_CONFIG.browseLimit, isInteger(1, 10000), 'an integer between 1 and 10000'),
     skipDirectories: Object.freeze(skipDirectories.map((entry) => entry.toLowerCase())),
     allowRoots: Object.freeze(allowRoots.map((entry) => path.resolve(entry))),
@@ -310,29 +308,58 @@ function parseRefLine(line) {
 }
 
 /**
+ * Resolve the requested history scope.
+ * @param branch - optional branch or remote-tracking branch name from the request.
+ * @returns the validated ref name, or null when every ref in the repository is shown.
+ * @throws when the name is malformed.
+ */
+function normalizeLogScope(branch) {
+  if (typeof branch !== 'string') return null
+  const name = branch.trim()
+  if (name === '') return null
+  if (!/^[A-Za-z0-9._/-]+$/.test(name) || name.startsWith('-') || name.endsWith('/')) {
+    throw new RequestError('bad_request', '`branch` must be a branch or remote-tracking branch name.')
+  }
+  return name
+}
+
+/**
  * Read one page of the recent commit history with parents and ref labels.
  *
  * Pagination is by position in the same `--topo-order` walk: the client asks for
  * the next page with `offset = commits already loaded`, and the Host fetches one
- * commit beyond the page to report whether older history remains.
+ * commit beyond the page to report whether older history remains. The scope is
+ * either the whole repository (every ref, the default) or one branch / remote-
+ * tracking branch.
  * @param repo - absolute repository root.
  * @param limit - page size; clamped into the configured range.
  * @param offset - commits to skip from the start of the history.
  * @param config - resolved configuration.
+ * @param branch - branch or remote-tracking ref to scope the history to; absent shows all refs.
  * @returns the head facts, the page of commits newest first, and whether older commits remain.
  * @throws when git fails for a reason other than an unborn branch.
  */
-export async function readLog(repo, limit, offset, config) {
+export async function readLog(repo, limit, offset, config, branch) {
   const requested = Number.isInteger(limit) ? limit : config.logLimit
   const count = Math.min(Math.max(requested, 1), config.logLimit)
   const skip = Number.isInteger(offset) && offset > 0 ? offset : 0
+  const scope = normalizeLogScope(branch)
   const format = '%H%x1f%h%x1f%P%x1f%an%x1f%at%x1f%s%x1e'
-  // The graph follows the checked-out branch by default: all-refs history can
-  // open dozens of lanes on repositories with many remote branches.
   const args = ['log', '-n', String(count + 1)]
   if (skip > 0) args.push('--skip', String(skip))
-  if (config.includeAllRefs) args.push('--all')
   args.push('--topo-order', '--no-color', `--pretty=format:${format}`)
+  if (scope === null) {
+    args.push('--all')
+  } else {
+    const local = await runGit(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${scope}`], { timeout: config.gitTimeoutMs })
+    if (local.code !== 0) {
+      const remote = await runGit(repo, ['rev-parse', '--verify', '--quiet', `refs/remotes/${scope}`], { timeout: config.gitTimeoutMs })
+      if (remote.code !== 0) {
+        throw new RequestError('unknown_branch', `No branch or remote-tracking ref named ${scope}.`)
+      }
+    }
+    args.push(scope)
+  }
   const result = await runGit(repo, args, {
     timeout: config.gitTimeoutMs,
   })
@@ -362,18 +389,18 @@ export async function readLog(repo, limit, offset, config) {
   const hasMore = commits.length > count
   if (hasMore) commits.length = count
 
-  const { byHash, branch } = await readRefMap(repo, config)
+  const { byHash, branch: currentBranch } = await readRefMap(repo, config)
   for (const commit of commits) {
-    commit.refs = refsForHash(byHash, branch, commit.hash)
+    commit.refs = refsForHash(byHash, currentBranch, commit.hash)
   }
-  if (branch === null && commits.length > 0) {
+  if (currentBranch === null && commits.length > 0) {
     const headResult = await runGit(repo, ['rev-parse', 'HEAD'], { timeout: config.gitTimeoutMs })
     const headHash = headResult.code === 0 ? trimLine(headResult.stdout).trim() : ''
     const headCommit = commits.find((commit) => commit.hash === headHash)
     if (headCommit !== undefined) headCommit.refs = [...headCommit.refs, { name: 'HEAD', kind: 'head' }]
   }
 
-  return { head: { branch, detached: branch === null }, commits, hasMore }
+  return { head: { branch: currentBranch, detached: currentBranch === null }, commits, hasMore }
 }
 
 /**
@@ -418,21 +445,35 @@ function refsForHash(refsByHash, branch, hash) {
 }
 
 /**
- * List local branches and the current one.
+ * List local branches, remote-tracking branches, and the current one.
  * @param repo - absolute repository root.
  * @param config - resolved configuration.
- * @returns current branch name (null when detached) and local branch names.
+ * @returns current branch name (null when detached), local branch names, and remote-tracking names.
  * @throws when git fails.
  */
 export async function readBranches(repo, config) {
-  const refs = await runGit(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'], { timeout: config.gitTimeoutMs })
+  const refs = await runGit(repo, ['for-each-ref', '--format=%(refname)%09%(refname:short)', 'refs/heads', 'refs/remotes'], { timeout: config.gitTimeoutMs })
   if (refs.code !== 0) throw gitFailure(refs, 'git for-each-ref')
   const current = await runGit(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { timeout: config.gitTimeoutMs })
-  const locals = refs.stdout
-    .split('\n')
-    .map((line) => trimLine(line).trim())
-    .filter((line) => line.length > 0)
-  return { current: current.code === 0 ? trimLine(current.stdout).trim() : null, locals }
+  const locals = []
+  const remotes = []
+  for (const line of refs.stdout.split('\n')) {
+    const [fullRef, shortRef] = line.split('\t')
+    if (fullRef === undefined || shortRef === undefined) continue
+    // Symbolic remote refs (a remote's HEAD) shorten to the bare remote name;
+    // they name a remote, not a branch, so the picker does not list them.
+    if (/\/HEAD$/.test(fullRef)) continue
+    const name = trimLine(shortRef).trim()
+    if (name === '') continue
+    const bucket = fullRef.startsWith('refs/remotes/') ? remotes : locals
+    if (bucket.includes(name)) continue
+    bucket.push(name)
+  }
+  return {
+    current: current.code === 0 ? trimLine(current.stdout).trim() : null,
+    locals,
+    remotes,
+  }
 }
 
 /**
@@ -924,7 +965,7 @@ export function createGitService(configInput) {
       case 'commit':
         return await commit(payload.repo, payload.message)
       case 'log':
-        return await readLog(await requireRepository(payload.repo), payload.limit, payload.offset, config)
+        return await readLog(await requireRepository(payload.repo), payload.limit, payload.offset, config, payload.branch)
       case 'branches':
         return await readBranches(await requireRepository(payload.repo), config)
       case 'switch':
@@ -983,7 +1024,7 @@ export function createGitService(configInput) {
     stageAll,
     unstageAll,
     commit,
-    log: async (repo, limit, offset) => await readLog(await requireRepository(repo), limit, offset, config),
+    log: async (repo, limit, offset, branch) => await readLog(await requireRepository(repo), limit, offset, config, branch),
     branches: async (repo) => await readBranches(await requireRepository(repo), config),
     switchBranch,
     browse,

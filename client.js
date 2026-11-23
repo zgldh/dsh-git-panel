@@ -41,6 +41,28 @@ window.__ModuleLoader__.load({
       'graph.empty': '还没有提交记录。',
       'graph.error': '提交图加载失败',
 
+      'branchFilter.aria': '选择要显示的提交分支',
+      'branchFilter.all': '全部',
+      'branchFilter.allHint': '所有分支的历史',
+      'branchFilter.only': '只看 {branch}',
+      'branchFilter.current': '当前 {branch}',
+      'branchFilter.detachedReadout': 'HEAD 分离',
+      'branchFilter.searchPlaceholder': '输入以搜索分支',
+      'branchFilter.searchAria': '搜索分支',
+      'branchFilter.groupMain': '主分支',
+      'branchFilter.groupDevelop': '开发分支',
+      'branchFilter.groupOthers': '其他分支',
+      'branchFilter.groupRemotes': '远程分支',
+      'branchFilter.currentMark': '当前分支',
+      'branchFilter.checkout': '切换到 {branch}',
+      'branchFilter.loading': '正在加载分支…',
+      'branchFilter.loadFailed': '分支列表加载失败',
+      'branchFilter.empty': '没有匹配的分支',
+      'branchFilter.noBranches': '没有可用的分支。',
+      'branchFilter.commitHint': '提交仍会进入 {branch}',
+      'branchFilter.missing': '分支 {branch} 不存在，已切回全部',
+      'branchFilter.close': '关闭分支列表',
+
       'diff.staged': '已暂存',
       'diff.unstaged': '未暂存',
       'diff.close': '关闭 diff',
@@ -68,14 +90,12 @@ window.__ModuleLoader__.load({
 
       'toolbar.refresh': '刷新',
       'toolbar.busy': '正在更新…',
-      'toolbar.branch': '切换分支',
       'toolbar.detached': 'detached HEAD',
       'toolbar.aheadBehind': '领先 {ahead} 个提交，落后 {behind} 个提交',
       'toolbar.aheadBehindText': '↑{ahead} ↓{behind}',
       'toolbar.upstream': '跟踪 {upstream}',
 
       'branch.switched': '已切换到 {branch}',
-      'branch.detachedOption': '（detached）',
 
       'state.resolvingCwd': '正在确定当前会话的工作目录…',
       'state.noCwd': '当前会话还没有工作目录。',
@@ -187,6 +207,28 @@ window.__ModuleLoader__.load({
       'graph.empty': 'No commits yet.',
       'graph.error': 'Failed to load the commit graph',
 
+      'branchFilter.aria': 'Choose the branch to show',
+      'branchFilter.all': 'All',
+      'branchFilter.allHint': 'History of every ref',
+      'branchFilter.only': 'Only {branch}',
+      'branchFilter.current': 'Current {branch}',
+      'branchFilter.detachedReadout': 'detached HEAD',
+      'branchFilter.searchPlaceholder': 'Type to filter branches',
+      'branchFilter.searchAria': 'Filter branches',
+      'branchFilter.groupMain': 'Main branches',
+      'branchFilter.groupDevelop': 'Development branches',
+      'branchFilter.groupOthers': 'Other branches',
+      'branchFilter.groupRemotes': 'Remote branches',
+      'branchFilter.currentMark': 'Current branch',
+      'branchFilter.checkout': 'Switch to {branch}',
+      'branchFilter.loading': 'Loading branches…',
+      'branchFilter.loadFailed': 'Failed to load branches',
+      'branchFilter.empty': 'No matching branches',
+      'branchFilter.noBranches': 'No branches available.',
+      'branchFilter.commitHint': 'Commits still go to {branch}',
+      'branchFilter.missing': 'Branch {branch} no longer exists; showing all',
+      'branchFilter.close': 'Close branch list',
+
       'diff.staged': 'Staged',
       'diff.unstaged': 'Unstaged',
       'diff.close': 'Close diff',
@@ -214,14 +256,12 @@ window.__ModuleLoader__.load({
 
       'toolbar.refresh': 'Refresh',
       'toolbar.busy': 'Updating…',
-      'toolbar.branch': 'Switch branch',
       'toolbar.detached': 'detached HEAD',
       'toolbar.aheadBehind': '{ahead} commits ahead, {behind} behind',
       'toolbar.aheadBehindText': '↑{ahead} ↓{behind}',
       'toolbar.upstream': 'tracking {upstream}',
 
       'branch.switched': 'Switched to {branch}',
-      'branch.detachedOption': '(detached)',
 
       'state.resolvingCwd': 'Determining the working directory of this session…',
       'state.noCwd': 'This session has no working directory yet.',
@@ -395,7 +435,9 @@ window.__ModuleLoader__.load({
 
     const EMPTY_FILES = Object.freeze([])
     const EMPTY_COMMITS = Object.freeze([])
-    const EMPTY_BRANCHES = Object.freeze({ current: null, locals: Object.freeze([]) })
+    const EMPTY_BRANCHES = Object.freeze({ current: null, locals: Object.freeze([]), remotes: Object.freeze([]) })
+    /** History scope showing every ref; the default and the "全部" entry. */
+    const ALL_BRANCH_SCOPE = Object.freeze({ kind: 'all' })
     const IDLE_DIFF = Object.freeze({ phase: 'idle', data: null, error: null })
     const IDLE_DETAIL = Object.freeze({ phase: 'idle', hash: null, data: null, error: null })
     const IDLE_PATCH = Object.freeze({ phase: 'idle', path: null, data: null, error: null })
@@ -465,7 +507,7 @@ window.__ModuleLoader__.load({
 .dsh-git-pickerDisclosure svg{transition:transform .15s ease;transform:rotate(-90deg)}
 .dsh-git-pickerDisclosure[data-open="true"] svg{transform:rotate(0)}
 .dsh-git-pickerDisclosure[data-empty="true"]{visibility:hidden;pointer-events:none}
-.dsh-git-toolbarCenter{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden}
+.dsh-git-toolbarCenter{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;overflow:visible}
 .dsh-git-toolbarActions{flex:none;display:flex;align-items:center;gap:6px}
 .dsh-git-aiWrap{position:relative;display:inline-flex;align-items:center}
 .dsh-git-aiButton{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
@@ -672,6 +714,33 @@ window.__ModuleLoader__.load({
 .dsh-git-view ::-webkit-scrollbar-track{background:transparent}
 .dsh-git-view ::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:5px;background-clip:padding-box;background-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 35%, transparent)}
 .dsh-git-view ::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb, var(--dsw-alias-label-secondary) 55%, transparent)}
+.dsh-git-branchPicker{position:relative;flex:none;display:flex;align-items:center;gap:6px;min-width:0}
+.dsh-git-branchButton{flex:none;display:inline-flex;align-items:center;gap:4px;height:26px;max-width:220px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}
+.dsh-git-branchButton:hover:not(:disabled){border-color:var(--dsw-alias-border-l2)}
+.dsh-git-branchButton:disabled{opacity:.5;cursor:default}
+.dsh-git-branchButtonText{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-git-branchCurrent{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsh-git-faint)}
+.dsh-git-branchMenu{position:absolute;top:calc(100% + 4px);left:0;z-index:30;display:flex;flex-direction:column;width:320px;max-width:min(360px,86vw);max-height:min(420px,72vh);padding:4px}
+.dsh-git-branchSearchWrap{flex:none;padding:2px 4px 4px}
+.dsh-git-branchSearch{width:100%;height:28px;padding:0 8px;border:.5px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;box-sizing:border-box}
+.dsh-git-branchSearch:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
+.dsh-git-branchError{margin:0;padding:4px 8px 6px;font-size:11px;line-height:15px;color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}
+.dsh-git-branchHint{margin:0;padding:6px 8px;font-size:11px;line-height:15px;color:var(--dsw-alias-label-tertiary)}
+.dsh-git-branchList{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.dsh-git-branchGroupTitle{margin:0;padding:6px 8px 2px;font-size:11px;line-height:15px;color:var(--dsw-alias-label-tertiary)}
+.dsh-git-branchRow{display:flex;align-items:center;gap:2px;border-radius:var(--dsw-radius-md)}
+.dsh-git-branchRow[data-active="true"]{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-git-branchRowMain{flex:1;display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 8px;border:0;border-radius:var(--dsw-radius-md);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;cursor:pointer;text-align:left}
+.dsh-git-branchRowMain[aria-selected="true"]{background:var(--dsh-git-selected)}
+.dsh-git-branchName{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-git-branchName[data-current="true"]{font-weight:600}
+.dsh-git-branchMark{flex:none;font-size:12px;line-height:16px;color:var(--dsw-alias-state-success-primary)}
+.dsh-git-branchHintInline{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsh-git-faint)}
+.dsh-git-branchCheckout{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:4px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0}
+.dsh-git-branchRow:hover .dsh-git-branchCheckout,.dsh-git-branchCheckout:focus-visible{opacity:1}
+.dsh-git-branchCheckout:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsh-git-branchCheckout:disabled{opacity:0;pointer-events:none}
+.dsh-git-commitHint{margin:0;padding:2px 2px 4px;font-size:11px;line-height:16px;color:var(--dsh-git-faint)}
 `
 
     /**
@@ -903,20 +972,89 @@ window.__ModuleLoader__.load({
     /**
      * Normalize the Host branch list payload.
      * @param value - raw `branches` value.
-     * @returns the current branch and the local branch names.
+     * @returns the current branch, local branch names, and remote-tracking names.
      */
     function normalizeBranches(value) {
-      const locals = []
-      if (value && Array.isArray(value.locals)) {
-        for (let index = 0; index < value.locals.length; index += 1) {
-          const name = value.locals[index]
-          if (typeof name === 'string' && name !== '' && locals.indexOf(name) === -1) locals.push(name)
+      const readNames = (list) => {
+        const names = []
+        if (!Array.isArray(list)) return names
+        for (let index = 0; index < list.length; index += 1) {
+          const name = list[index]
+          if (typeof name === 'string' && name !== '' && names.indexOf(name) === -1) names.push(name)
         }
+        return names
       }
       return {
         current: value && typeof value.current === 'string' && value.current !== '' ? value.current : null,
-        locals,
+        locals: readNames(value ? value.locals : null),
+        remotes: readNames(value ? value.remotes : null),
       }
+    }
+
+    /**
+     * Normalize the remembered history scope of this Session.
+     * @param value - stored `branchScope` value.
+     * @returns the validated scope; anything unusable falls back to "全部".
+     */
+    function normalizeBranchScope(value) {
+      if (value !== null && typeof value === 'object' && value.kind === 'branch'
+        && typeof value.name === 'string' && value.name !== '') {
+        return { kind: 'branch', name: value.name }
+      }
+      return ALL_BRANCH_SCOPE
+    }
+
+    /**
+     * Match one branch name against a typed query, the way the Harness quick
+     * pickers do: a case-insensitive subsequence match, so `dev` finds
+     * `development` and `f` finds `feature/foo`.
+     * @param name - branch name.
+     * @param query - lower-cased query already trimmed by the caller.
+     * @returns true when every character of the query appears in order.
+     */
+    function fuzzyBranchMatch(name, query) {
+      if (query === '') return true
+      const haystack = name.toLowerCase()
+      let position = 0
+      for (const character of query) {
+        const found = haystack.indexOf(character, position)
+        if (found === -1) return false
+        position = found + 1
+      }
+      return true
+    }
+
+    /** Group key of one local branch: main, development, or everything else. */
+    function branchGroupOf(name) {
+      if (/^(main|master)$/i.test(name)) return 'main'
+      if (/^(develop|development)$/i.test(name)) return 'develop'
+      return 'others'
+    }
+
+    /**
+     * Build the navigable rows of the branch filter, in display order.
+     *
+     * With an empty query the rows are grouped (全部, main, development, other
+     * local branches, remote branches); a query flattens them into one list of
+     * matching names, since group headings only add noise while searching.
+     * @param branches - normalized branch list.
+     * @param query - raw query text.
+     * @returns the rows: `{ kind, name }`, where kind is all, local, or remote.
+     */
+    function branchFilterRows(branches, query) {
+      const needle = query.trim().toLowerCase()
+      const rows = []
+      if (needle === '') rows.push({ kind: 'all', name: '' })
+      const pushLocal = (name) => {
+        if (fuzzyBranchMatch(name, needle)) rows.push({ kind: 'local', name })
+      }
+      for (const name of branches.locals) if (branchGroupOf(name) === 'main') pushLocal(name)
+      for (const name of branches.locals) if (branchGroupOf(name) === 'develop') pushLocal(name)
+      for (const name of branches.locals) if (branchGroupOf(name) === 'others') pushLocal(name)
+      for (const name of branches.remotes) {
+        if (fuzzyBranchMatch(name, needle)) rows.push({ kind: 'remote', name })
+      }
+      return rows
     }
 
     /**
@@ -1659,6 +1797,164 @@ window.__ModuleLoader__.load({
         cwd === null
           ? null
           : h('div', { key: 'tree', className: 'dsh-git-pickerChildren', role: 'group', 'aria-label': t('picker.children') }, levelRows(cwd, 0)),
+      ])
+    }
+
+    /**
+     * Render the small "switch to this branch" arrow of the branch filter rows.
+     * @param edge - square edge in pixels.
+     * @returns the SVG element.
+     */
+    function checkoutGlyph(edge) {
+      return h('svg', {
+        width: edge,
+        height: edge,
+        viewBox: '0 0 16 16',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.4,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        'aria-hidden': 'true',
+        focusable: 'false',
+      }, [
+        h('path', { key: 'shaft', d: 'M2.5 8h7' }),
+        h('path', { key: 'arrow', d: 'm7.5 4.5 3.5 3.5-3.5 3.5' }),
+      ])
+    }
+
+    /**
+     * Render the branch filter popover: a search field, grouped branch rows, and
+     * the secondary "switch to this branch" action. Purely presentational; the
+     * filter choice, query, and highlighted row live in the Git view.
+     * @param options - copy, rows, query, highlighted index, current scope and branch, phases, and handlers.
+     * @returns the popover element.
+     */
+    function renderBranchFilter(options) {
+      const {
+        t, rows, query, activeIndex, scope, currentBranch, phase, pickerError, listError,
+        onQuery, onHover, onKeyDown, onSelect, onCheckout, onRetry,
+      } = options
+      const searching = query.trim() !== ''
+      const groupTitle = (row) => {
+        if (row.kind === 'all') return null
+        if (row.kind === 'remote') return t('branchFilter.groupRemotes')
+        const group = branchGroupOf(row.name)
+        if (group === 'main') return t('branchFilter.groupMain')
+        if (group === 'develop') return t('branchFilter.groupDevelop')
+        return t('branchFilter.groupOthers')
+      }
+      const rowNodes = []
+      let lastTitle
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index]
+        const title = searching ? null : groupTitle(row)
+        if (title !== lastTitle) {
+          if (title !== null) rowNodes.push(h('p', { key: 'group:' + row.kind + ':' + index, className: 'dsh-git-branchGroupTitle' }, title))
+          lastTitle = title
+        }
+        const selected = row.kind === 'all' ? scope.kind === 'all' : (scope.kind === 'branch' && scope.name === row.name)
+        const current = row.kind === 'local' && currentBranch === row.name
+        const checkoutable = row.kind === 'local' && row.name !== currentBranch
+        rowNodes.push(h('div', {
+          key: 'row:' + row.kind + ':' + row.name,
+          className: 'dsh-git-branchRow',
+          'data-active': index === activeIndex ? 'true' : 'false',
+          'data-kind': row.kind,
+          'data-branch': row.kind === 'all' ? 'all' : row.name,
+        }, [
+          h('button', {
+            key: 'main',
+            type: 'button',
+            role: 'option',
+            className: 'dsh-git-branchRowMain',
+            'aria-selected': selected ? 'true' : 'false',
+            'aria-label': row.kind === 'all'
+              ? t('branchFilter.all')
+              : (current ? t('branchFilter.currentMark') + ': ' + row.name : row.name),
+            title: row.kind === 'all' ? t('branchFilter.allHint') : row.name,
+            onMouseEnter: () => { onHover(index) },
+            onFocus: () => { onHover(index) },
+            onClick: () => { onSelect(row) },
+          }, row.kind === 'all'
+            ? [
+              h('span', { key: 'name', className: 'dsh-git-branchName' }, t('branchFilter.all')),
+              h('span', { key: 'hint', className: 'dsh-git-branchHintInline' }, t('branchFilter.allHint')),
+            ]
+            : [
+              h('span', {
+                key: 'name',
+                className: 'dsh-git-branchName',
+                'data-current': current ? 'true' : 'false',
+              }, row.name),
+              current
+                ? h('span', { key: 'mark', className: 'dsh-git-branchMark', title: t('branchFilter.currentMark'), 'aria-hidden': 'true' }, '✓')
+                : null,
+            ]),
+          checkoutable
+            ? h('button', {
+              key: 'checkout',
+              type: 'button',
+              className: 'dsh-git-branchCheckout',
+              tabIndex: -1,
+              'aria-label': t('branchFilter.checkout', { branch: row.name }),
+              title: t('branchFilter.checkout', { branch: row.name }),
+              onClick: (event) => {
+                event.stopPropagation()
+                onCheckout(row.name)
+              },
+            }, checkoutGlyph(12))
+            : null,
+        ]))
+      }
+      const listChildren = []
+      if (phase === 'loading') {
+        listChildren.push(h('p', { key: 'loading', className: 'dsh-git-branchHint' }, t('branchFilter.loading')))
+      } else if (phase === 'error') {
+        listChildren.push(h('div', { key: 'load-error', className: 'dsh-git-branchHint' }, [
+          h('span', { key: 'text' }, listError === null ? t('branchFilter.loadFailed') : listError),
+          h('button', {
+            key: 'retry',
+            type: 'button',
+            className: 'dsh-git-miniButton',
+            onClick: onRetry,
+          }, t('state.retry')),
+        ]))
+      }
+      if (rows.length === 0) {
+        const emptyKey = query.trim() === '' ? 'branchFilter.noBranches' : 'branchFilter.empty'
+        listChildren.push(h('p', { key: 'empty', className: 'dsh-git-branchHint' }, t(emptyKey)))
+      } else {
+        listChildren.push(h('div', {
+          key: 'list',
+          className: 'dsh-git-branchList',
+          role: 'listbox',
+          'aria-label': t('branchFilter.aria'),
+        }, rowNodes))
+      }
+      return h('div', {
+        key: 'menu',
+        className: 'dsh-git-menuSurface dsh-git-branchMenu',
+        role: 'dialog',
+        'aria-label': t('branchFilter.aria'),
+      }, [
+        h('div', { key: 'search', className: 'dsh-git-branchSearchWrap' }, h('input', {
+          key: 'input',
+          className: 'dsh-git-branchSearch',
+          type: 'search',
+          value: query,
+          autoFocus: true,
+          autoComplete: 'off',
+          spellCheck: false,
+          placeholder: t('branchFilter.searchPlaceholder'),
+          'aria-label': t('branchFilter.searchAria'),
+          onChange: (event) => { onQuery(event.target.value) },
+          onKeyDown,
+        })),
+        pickerError === null
+          ? null
+          : h('p', { key: 'picker-error', className: 'dsh-git-branchError', role: 'alert' }, pickerError),
+        ...listChildren,
       ])
     }
 
@@ -2833,6 +3129,13 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState(null)
       const [status, setStatus] = useState(null)
       const [branches, setBranches] = useState(EMPTY_BRANCHES)
+      const [branchScope, setBranchScope] = useState(() => normalizeBranchScope(initialView.branchScope))
+      const [branchPickerOpen, setBranchPickerOpen] = useState(false)
+      const [branchQuery, setBranchQuery] = useState('')
+      const [branchActive, setBranchActive] = useState(0)
+      const [branchPickerPhase, setBranchPickerPhase] = useState('idle')
+      const [branchListError, setBranchListError] = useState(null)
+      const [branchPickerError, setBranchPickerError] = useState(null)
       const [commits, setCommits] = useState(EMPTY_COMMITS)
       const [logPhase, setLogPhase] = useState('idle')
       const [logError, setLogError] = useState(null)
@@ -2879,6 +3182,9 @@ window.__ModuleLoader__.load({
       const cwdRef = useRef(repository)
       const pickerRef = useRef(null)
       const pickerAbortRef = useRef(null)
+      const branchPickerRef = useRef(null)
+      const branchScopeRef = useRef(branchScope)
+      const logScopeRef = useRef(branchScope.kind === 'branch' ? 'branch:' + branchScope.name : 'all')
       const aiRef = useRef(null)
       const bodyRef = useRef(null)
       const listRef = useRef(null)
@@ -2908,6 +3214,7 @@ window.__ModuleLoader__.load({
       })
 
       const graph = useMemo(() => buildGraph(commits), [commits])
+      const branchRows = useMemo(() => branchFilterRows(branches, branchQuery), [branches, branchQuery])
       const graphWidth = Math.max(GRAPH_MIN_WIDTH, Math.min(graph.laneCount, GRAPH_MAX_LANES) * LANE_WIDTH)
 
       useEffect(() => {
@@ -2921,6 +3228,10 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         cwdRef.current = repository
       }, [repository])
+
+      useEffect(() => {
+        branchScopeRef.current = branchScope
+      }, [branchScope])
 
       useEffect(() => {
         logPhaseRef.current = logPhase
@@ -2945,6 +3256,12 @@ window.__ModuleLoader__.load({
         }
         return call(action, params, signal)
       }, [])
+
+      /** Stable text key of one history scope, used to avoid redundant log reloads. */
+      const logScopeKey = (scope) => (scope.kind === 'branch' ? 'branch:' + scope.name : 'all')
+
+      /** Request parameters that scope the log request to the selected branch filter. */
+      const logScopeParams = useCallback((scope) => (scope.kind === 'branch' ? { branch: scope.name } : {}), [])
 
       const showNotice = useCallback((tone, text) => {
         setNotice({ tone, text })
@@ -3145,6 +3462,38 @@ window.__ModuleLoader__.load({
       }, [aiMenuOpen, mergeOpen])
 
       useEffect(() => {
+        if (!branchPickerOpen) return undefined
+        const onPointerDown = (event) => {
+          const container = branchPickerRef.current
+          if (container !== null && event.target instanceof Node && container.contains(event.target)) return
+          setBranchPickerOpen(false)
+          setBranchQuery('')
+          setBranchPickerError(null)
+        }
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          setBranchPickerOpen(false)
+          setBranchQuery('')
+          setBranchPickerError(null)
+        }
+        document.addEventListener('pointerdown', onPointerDown)
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+          document.removeEventListener('pointerdown', onPointerDown)
+          document.removeEventListener('keydown', onKeyDown)
+        }
+      }, [branchPickerOpen])
+
+      // Keep the highlighted branch row visible while the reader walks the list.
+      useEffect(() => {
+        if (!branchPickerOpen) return
+        const container = branchPickerRef.current
+        if (container === null) return
+        const active = container.querySelector('[data-active="true"]')
+        if (active !== null && typeof active.scrollIntoView === 'function') active.scrollIntoView({ block: 'nearest' })
+      }, [branchPickerOpen, branchActive])
+
+      useEffect(() => {
         if (notice === null) return undefined
         const timer = setTimeout(() => { setNotice(null) }, NOTICE_MS)
         return () => { clearTimeout(timer) }
@@ -3213,6 +3562,7 @@ window.__ModuleLoader__.load({
       }, [applySplitWidth])
 
       const loadRepository = useCallback(async (repo, signal) => {
+        logScopeRef.current = logScopeKey(branchScopeRef.current)
         setPhase('loading')
         setError(null)
         setStatus(null)
@@ -3235,7 +3585,7 @@ window.__ModuleLoader__.load({
         const results = await Promise.all([
           settle(invoke('status', { repo }, signal)),
           settle(invoke('branches', { repo }, signal)),
-          settle(invoke('log', { repo, limit: LOG_LIMIT }, signal)),
+          settle(invoke('log', { repo, limit: LOG_LIMIT, ...logScopeParams(branchScopeRef.current) }, signal)),
         ])
         if (signal.aborted) return
         const statusResult = results[0]
@@ -3282,9 +3632,9 @@ window.__ModuleLoader__.load({
           setLogPhase('error')
           setLogError(messageOf(logResult.error, translateRef.current))
         }
-      }, [invoke, showNotice])
+      }, [invoke, logScopeParams, showNotice])
 
-      const reloadLog = useCallback(async (repo) => {
+      const reloadLog = useCallback(async (repo, scope) => {
         if (logAbortRef.current !== null) logAbortRef.current.abort()
         const controller = new AbortController()
         logAbortRef.current = controller
@@ -3299,7 +3649,13 @@ window.__ModuleLoader__.load({
           logMoreAbortRef.current = null
         }
         try {
-          const value = await invoke('log', { repo, limit: LOG_LIMIT }, controller.signal)
+          const scopeToUse = scope === undefined ? branchScopeRef.current : scope
+          logScopeRef.current = logScopeKey(scopeToUse)
+          const value = await invoke('log', {
+            repo,
+            limit: LOG_LIMIT,
+            ...logScopeParams(scopeToUse),
+          }, controller.signal)
           if (controller.signal.aborted || cwdRef.current !== repo) return
           const page = normalizeLog(value)
           setCommits(page.commits)
@@ -3312,7 +3668,7 @@ window.__ModuleLoader__.load({
         } finally {
           if (logAbortRef.current === controller) logAbortRef.current = null
         }
-      }, [invoke])
+      }, [invoke, logScopeParams])
 
       /** Append the next page of commits when the graph is scrolled to its bottom. */
       const loadMoreLog = useCallback(async () => {
@@ -3330,6 +3686,7 @@ window.__ModuleLoader__.load({
             repo,
             limit: LOG_LIMIT,
             offset: commitsRef.current.length,
+            ...logScopeParams(branchScopeRef.current),
           }, controller.signal)
           if (controller.signal.aborted || cwdRef.current !== repo) return
           const page = normalizeLog(value)
@@ -3447,6 +3804,10 @@ window.__ModuleLoader__.load({
           setSelection(null)
           setDiff(IDLE_DIFF)
           setTab('graph')
+          setBranchScope(ALL_BRANCH_SCOPE)
+          branchScopeRef.current = ALL_BRANCH_SCOPE
+          setBranchPickerOpen(false)
+          setBranchPickerError(null)
           scrollMemoryRef.current = { graph: 0, side: 0 }
         }
         if (repository === null) {
@@ -3473,6 +3834,7 @@ window.__ModuleLoader__.load({
         }
       }, [repository, loadRepository, clearDetail])
 
+
       // Restore once the Session identity is bound. The slot can render this view
       // before sessionId reaches the element; writing then would overwrite the
       // memory with defaults, so the first write waits for this restore.
@@ -3482,6 +3844,7 @@ window.__ModuleLoader__.load({
         restoreAppliedRef.current = true
         const saved = readViewState(sessionId)
         if (typeof saved.repoOverride === 'string' && saved.repoOverride.length > 0) setRepoOverride(saved.repoOverride)
+        setBranchScope(normalizeBranchScope(saved.branchScope))
         if (typeof saved.message === 'string') setMessage(saved.message)
         if (typeof saved.expandedHash === 'string' && saved.expandedHash.length > 0) setExpandedHash(saved.expandedHash)
         if (saved.selection !== null && typeof saved.selection === 'object'
@@ -3502,6 +3865,7 @@ window.__ModuleLoader__.load({
         if (!restoreAppliedRef.current) return
         writeViewState(sessionId, {
           repoOverride,
+          branchScope,
           message,
           tab,
           selection,
@@ -3509,9 +3873,20 @@ window.__ModuleLoader__.load({
           graphScrollTop: scrollMemoryRef.current.graph,
           sideScrollTop: scrollMemoryRef.current.side,
         })
-      }, [sessionId, repoOverride, message, tab, selection, expandedHash])
+      }, [sessionId, repoOverride, branchScope, message, tab, selection, expandedHash])
 
-      latestViewRef.current = { repoOverride, message, tab, selection, expandedHash }
+      // The remembered scope is restored after the first render; once the
+      // repository is ready, re-read the first page if the log used another scope.
+      useEffect(() => {
+        if (!restoreAppliedRef.current) return
+        if (phase !== 'ready') return
+        const repository = cwdRef.current
+        if (repository === null) return
+        if (logScopeRef.current === logScopeKey(branchScope)) return
+        void reloadLog(repository, branchScope)
+      }, [branchScope, phase, reloadLog])
+
+      latestViewRef.current = { repoOverride, branchScope, message, tab, selection, expandedHash }
 
       // The scroll offsets change without a render, so persist them on unmount.
       useEffect(() => () => {
@@ -3624,7 +3999,7 @@ window.__ModuleLoader__.load({
           const results = await Promise.all([
             settle(invoke('status', { repo: repository }, controller.signal)),
             settle(invoke('branches', { repo: repository }, controller.signal)),
-            settle(invoke('log', { repo: repository, limit: LOG_LIMIT }, controller.signal)),
+            settle(invoke('log', { repo: repository, limit: LOG_LIMIT, ...logScopeParams(branchScopeRef.current) }, controller.signal)),
           ])
           if (controller.signal.aborted || cwdRef.current !== repository) return
           const statusResult = results[0]
@@ -3739,12 +4114,82 @@ window.__ModuleLoader__.load({
         })
       }
 
-      const changeBranch = async (branch) => {
+      /** Switch the graph scope, reload its first page, and collapse the old detail. */
+      const applyBranchScope = (scope) => {
+        branchScopeRef.current = scope
+        setBranchScope(scope)
+        setExpandedHash(null)
+        clearDetail()
+        scrollMemoryRef.current.graph = 0
+        if (listRef.current !== null) listRef.current.scrollTop = 0
+        const repository = cwdRef.current
+        if (repository !== null) void reloadLog(repository, scope)
+      }
+
+      // A remembered or chosen branch can disappear (deleted, or the repository
+      // changed underneath); fall back to "全部" instead of showing an empty graph.
+      useEffect(() => {
+        if (phase !== 'ready' || branchScope.kind !== 'branch') return
+        const known = branches.locals.indexOf(branchScope.name) !== -1
+          || branches.remotes.indexOf(branchScope.name) !== -1
+        if (known) return
+        if (branches.locals.length === 0 && branches.remotes.length === 0) return
+        showNotice('error', t('branchFilter.missing', { branch: branchScope.name }))
+        applyBranchScope(ALL_BRANCH_SCOPE)
+      }, [phase, branches, branchScope, t, applyBranchScope, showNotice])
+
+      /** Re-read the branch list for the open filter popover. */
+      const loadBranchList = async () => {
+        const repository = cwdRef.current
+        if (repository === null) {
+          setBranchPickerPhase('idle')
+          return
+        }
+        setBranchPickerPhase('loading')
+        setBranchListError(null)
+        try {
+          const value = await invoke('branches', { repo: repository })
+          if (cwdRef.current !== repository) return
+          setBranches(normalizeBranches(value))
+          setBranchPickerPhase('ready')
+        } catch (failure) {
+          if (cwdRef.current !== repository) return
+          setBranchPickerPhase('error')
+          setBranchListError(messageOf(failure, translateRef.current))
+        }
+      }
+
+      /** Open or close the branch filter; opening refreshes the branch list. */
+      const toggleBranchPicker = () => {
+        if (branchPickerOpen) {
+          setBranchPickerOpen(false)
+          setBranchQuery('')
+          setBranchPickerError(null)
+          return
+        }
+        setBranchPickerOpen(true)
+        setBranchQuery('')
+        setBranchActive(0)
+        setBranchPickerError(null)
+        void loadBranchList()
+      }
+
+      /** Choose one row of the popover as the graph scope. */
+      const chooseBranchFilter = (row) => {
+        setBranchPickerOpen(false)
+        setBranchQuery('')
+        setBranchPickerError(null)
+        applyBranchScope(row.kind === 'all' ? ALL_BRANCH_SCOPE : { kind: 'branch', name: row.name })
+      }
+
+      /** Switch the working tree to one local branch; the graph scope follows it on success. */
+      const checkoutBranch = async (branch) => {
         const repository = cwdRef.current
         if (repository === null || busyRef.current) return
         if (typeof branch !== 'string' || branch === '') return
         const current = status !== null && typeof status.branch === 'string' ? status.branch : null
         if (branch === current) return
+        setBranchPickerError(null)
         await runBusy(async () => {
           try {
             const result = await invoke('switch', { repo: repository, branch })
@@ -3753,12 +4198,47 @@ window.__ModuleLoader__.load({
             if (next !== null) setStatus(next)
             const applied = result && typeof result.branch === 'string' && result.branch !== '' ? result.branch : branch
             showNotice('success', translateRef.current('branch.switched', { branch: applied }))
+            setBranchPickerOpen(false)
+            setBranchQuery('')
+            applyBranchScope({ kind: 'branch', name: applied })
             setTab('graph')
-            await reloadLog(repository)
+            void loadBranchList()
           } catch (failure) {
-            showNotice('error', messageOf(failure, translateRef.current))
+            setBranchPickerError(messageOf(failure, translateRef.current))
           }
         })
+      }
+
+      /** Keyboard handling of the branch filter: arrows move, Enter filters, Ctrl+Enter switches. */
+      const onBranchKeyDown = (event) => {
+        const count = branchRows.length
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          if (count > 0) setBranchActive((index) => (index + 1) % count)
+          return
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          if (count > 0) setBranchActive((index) => (index - 1 + count) % count)
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          const row = branchRows[branchActive]
+          if (row === undefined) return
+          if ((event.metaKey || event.ctrlKey) && row.kind === 'local') {
+            void checkoutBranch(row.name)
+          } else {
+            chooseBranchFilter(row)
+          }
+          return
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setBranchPickerOpen(false)
+          setBranchQuery('')
+          setBranchPickerError(null)
+        }
       }
 
       const openFile = (file, staged) => {
@@ -3860,12 +4340,12 @@ window.__ModuleLoader__.load({
       const upstream = status !== null ? status.upstream : null
       const ahead = status !== null && Number.isFinite(status.ahead) ? status.ahead : 0
       const behind = status !== null && Number.isFinite(status.behind) ? status.behind : 0
-      const branchOptions = []
-      for (let index = 0; index < branches.locals.length; index += 1) {
-        const name = branches.locals[index]
-        if (name !== currentBranch) branchOptions.push(name)
-      }
-      if (currentBranch !== null) branchOptions.unshift(currentBranch)
+      const branchScopeLabel = branchScope.kind === 'all'
+        ? t('branchFilter.all')
+        : t('branchFilter.only', { branch: branchScope.name })
+      const branchCurrentReadout = t('branchFilter.current', {
+        branch: currentBranch === null ? t('branchFilter.detachedReadout') : currentBranch,
+      })
       const allBranches = []
       for (let index = 0; index < branches.locals.length; index += 1) {
         const name = branches.locals[index]
@@ -3959,23 +4439,51 @@ window.__ModuleLoader__.load({
             : null,
         ]),
         h('div', { key: 'center', className: 'dsh-git-toolbarCenter' }, [
-          h('select', {
-            key: 'branch',
-            className: 'dsh-git-select',
-            value: currentBranch === null ? '' : currentBranch,
-            disabled: busy || branchOptions.length === 0,
-            'aria-label': t('toolbar.branch'),
-            title: t('toolbar.branch'),
-            onChange: (event) => { void changeBranch(event.target.value) },
-          }, [
-            currentBranch === null
-              ? h('option', { key: '__detached', value: '', disabled: true }, t('branch.detachedOption'))
+          h('div', { key: 'branch', className: 'dsh-git-branchPicker', ref: branchPickerRef }, [
+            h('button', {
+              key: 'trigger',
+              type: 'button',
+              className: 'dsh-git-branchButton',
+              disabled: busy || phase !== 'ready',
+              'aria-haspopup': 'dialog',
+              'aria-expanded': branchPickerOpen,
+              'aria-label': t('branchFilter.aria'),
+              title: t('branchFilter.aria'),
+              onClick: toggleBranchPicker,
+            }, [
+              h('span', { key: 'text', className: 'dsh-git-branchButtonText' }, branchScopeLabel),
+              h('span', {
+                key: 'chevron',
+                className: 'dsh-git-chevron',
+                'data-open': branchPickerOpen ? 'true' : 'false',
+                'aria-hidden': 'true',
+              }, chevronGlyph(10)),
+            ]),
+            h('span', {
+              key: 'current',
+              className: 'dsh-git-branchCurrent',
+              title: branchCurrentReadout,
+            }, branchCurrentReadout),
+            branchPickerOpen
+              ? renderBranchFilter({
+                t,
+                rows: branchRows,
+                query: branchQuery,
+                activeIndex: branchActive,
+                scope: branchScope,
+                currentBranch,
+                phase: branchPickerPhase,
+                pickerError: branchPickerError,
+                listError: branchListError,
+                onQuery: (value) => { setBranchQuery(value); setBranchActive(0) },
+                onHover: (index) => { setBranchActive(index) },
+                onKeyDown: onBranchKeyDown,
+                onSelect: chooseBranchFilter,
+                onCheckout: (name) => { void checkoutBranch(name) },
+                onRetry: () => { void loadBranchList() },
+              })
               : null,
-            ...branchOptions.map((name, index) => h('option', { key: name + ':' + index, value: name }, name)),
           ]),
-          detached
-            ? h('span', { key: 'detached', className: 'dsh-git-chip dsh-git-chipWarn' }, t('toolbar.detached'))
-            : null,
           ahead === 0 && behind === 0
             ? null
             : h('span', {
@@ -4149,7 +4657,13 @@ window.__ModuleLoader__.load({
         }, closeGlyph(12)),
       ])
 
+      const commitTargetHint = branchScope.kind === 'branch' && currentBranch !== null && branchScope.name !== currentBranch
+        ? t('branchFilter.commitHint', { branch: currentBranch })
+        : null
       const commitBox = h('div', { key: 'commit', className: 'dsh-git-commit' }, [
+        commitTargetHint === null
+          ? null
+          : h('p', { key: 'target', className: 'dsh-git-commitHint' }, commitTargetHint),
         h('textarea', {
           key: 'input',
           className: 'dsh-git-textarea',
