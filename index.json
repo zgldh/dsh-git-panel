@@ -26,8 +26,8 @@
         "zh": "Git 面板"
       },
       "description": {
-        "en": "VSCode-style Git view for every Session: source control (stage, commit, diff), a branch-lane commit graph with inline commit details, and AI prompts for merge and review — for the Session working directory and nested repositories, with a cascading repository picker that probes one directory level at a time.",
-        "zh": "会话可用的 VSCode 风格 Git 视图：源码管理（暂存、提交、diff）、带行内提交详情的分支泳道提交图，以及合并/评审用的 AI prompt；支持会话工作目录和下级 Git 仓库，仓库选择器按层展开、点开哪层才探测哪层。"
+        "en": "VS Code-style Git view for DSH sessions: source control (stage, commit, diff), a branch-lane commit graph with inline commit details, a searchable branch filter, and AI prompts for merge/review — for every Session working directory, including nested repositories, with a picker that probes one directory level at a time.",
+        "zh": "会话可用的 VS Code 风格 Git 视图：源码管理（暂存、提交、diff）、带行内提交详情的分支泳道提交图、可搜索的分支过滤，以及合并/评审用的 AI prompt；支持会话工作目录和下级 Git 仓库，仓库选择器按层展开、点开哪层才探测哪层。"
       },
       "icon": "icon.svg",
       "author": "zgldh",
@@ -48,16 +48,16 @@
         ]
       },
       "dist-tags": {
-        "latest": "1.4.3"
+        "latest": "2.0.0"
       },
       "versions": [
         {
-          "version": "1.4.3",
-          "publishTimestamp": 1795032208,
+          "version": "2.0.0",
+          "publishTimestamp": 1795463184,
           "source": {
             "type": "git",
             "url": "https://github.com/zgldh/dsh-git-panel",
-            "commit": "74779f71abc9c91efc0e5672f7f6ec5c80085a1f"
+            "commit": "e75589cb6bde131ab29c0ad3155f8e6a1fe63dd2"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.3 <0.3.0"
