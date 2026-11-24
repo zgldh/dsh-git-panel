@@ -618,8 +618,8 @@ window.__ModuleLoader__.load({
 .dsh-git-graphCell{flex:none;display:inline-flex;align-items:center;height:26px}
 .dsh-git-graphSvg{display:block}
 .dsh-git-hash{flex:none;font-family:var(--dsh-git-mono);font-size:11px;color:var(--dsh-git-faint)}
-.dsh-git-refs{flex:0 1 auto;min-width:0;max-width:220px;display:flex;align-items:center;gap:4px;overflow:hidden}
-.dsh-git-ref{flex:0 1 auto;min-width:0;display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:3px;font-size:10px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary);border:.5px solid color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-label-secondary)) 55%, transparent);background:color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-label-secondary)) 22%, transparent)}
+.dsh-git-refs{flex:0 0 auto;min-width:0;max-width:min(45%,320px);display:flex;align-items:center;gap:4px;overflow:hidden}
+.dsh-git-ref{flex:0 1 auto;min-width:0;max-width:180px;display:block;height:16px;padding:0 5px;border-radius:3px;font-size:10px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary);border:.5px solid color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-label-secondary)) 55%, transparent);background:color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-label-secondary)) 22%, transparent)}
 .dsh-git-refMore{color:var(--dsh-git-faint);border-color:transparent;background:color-mix(in srgb, var(--dsw-alias-label-secondary) 8%, transparent)}
 .dsh-git-ref[data-current="true"]{font-weight:600;background:color-mix(in srgb, var(--dsh-git-ref-color, var(--dsw-alias-brand-primary)) 38%, transparent)}
 .dsh-git-subject{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}

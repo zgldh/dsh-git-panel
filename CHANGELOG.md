@@ -11,6 +11,14 @@ moved or reshaped behaviour under `Changed`, corrected behaviour under `Fixed`.
 
 - Nothing yet.
 
+## 2.0.1
+
+### Fixed
+
+- Branch and tag chips keep their complete border around the name: the chip
+  grows with its label (up to a limit) and shows an ellipsis when it still
+  overflows, instead of being clipped mid-word by the row.
+
 ## 2.0.0
 
 ### Changed
