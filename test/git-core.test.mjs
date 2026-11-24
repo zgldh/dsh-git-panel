@@ -53,6 +53,39 @@ function git(cwd, args) {
 }
 
 /**
+ * Run git synchronously with extra environment variables, throwing on failure.
+ * @param cwd - working directory.
+ * @param args - git arguments.
+ * @param env - additional environment variables (author/committer dates).
+ * @returns stdout.
+ */
+function gitEnv(cwd, args, env) {
+  return execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8',
+    windowsHide: true,
+    env: { ...process.env, ...env },
+  })
+}
+
+/**
+ * Create a commit-ready repository whose initial commit carries a fixed date.
+ * @param directory - repository directory.
+ * @param date - Git-accepted date string for the initial commit.
+ * @returns the directory.
+ */
+function initDatedRepo(directory, date) {
+  mkdirSync(directory, { recursive: true })
+  git(directory, ['init', '--initial-branch=main'])
+  git(directory, ['config', 'user.email', 'test@example.com'])
+  git(directory, ['config', 'user.name', 'Test User'])
+  git(directory, ['config', 'commit.gpgsign', 'false'])
+  writeFileSync(path.join(directory, 'tracked.txt'), 'one\ntwo\n')
+  git(directory, ['add', 'tracked.txt'])
+  gitEnv(directory, ['commit', '-m', 'initial commit'], { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date })
+  return directory
+}
+
+/**
  * Create a commit-ready repository.
  * @param directory - repository directory.
  * @returns the directory.
@@ -321,6 +354,26 @@ try {
       /No branch or remote-tracking ref named missing-branch/,
     )
     await assert.rejects(() => createGitService({}).log(branchy, 20, 0, '--all'), /must be a branch/)
+  })
+
+  await test('the log orders commits by date across parallel branches', async () => {
+    const dated = initDatedRepo(path.join(workspace, 'dated-order'), '2020-01-01T10:00:00')
+    const commitAt = (subject, date) => {
+      writeFileSync(path.join(dated, 'tracked.txt'), subject + '\n')
+      git(dated, ['add', 'tracked.txt'])
+      gitEnv(dated, ['commit', '-m', subject], { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date })
+    }
+    git(dated, ['checkout', '--quiet', '-b', 'side'])
+    commitAt('side one', '2020-01-02T10:00:00')
+    commitAt('side two', '2020-01-06T10:00:00')
+    git(dated, ['checkout', '--quiet', 'main'])
+    commitAt('main one', '2020-01-04T10:00:00')
+    commitAt('main two', '2020-01-08T10:00:00')
+    const result = await createGitService({}).log(dated, 20)
+    assert.deepEqual(
+      result.commits.map((commit) => commit.subject),
+      ['main two', 'side two', 'main one', 'side one', 'initial commit'],
+    )
   })
 
   await test('readLog pages through history with offset and reports hasMore', async () => {

@@ -326,7 +326,7 @@ function normalizeLogScope(branch) {
 /**
  * Read one page of the recent commit history with parents and ref labels.
  *
- * Pagination is by position in the same `--topo-order` walk: the client asks for
+ * Pagination is by position in the same `--date-order` walk: the client asks for
  * the next page with `offset = commits already loaded`, and the Host fetches one
  * commit beyond the page to report whether older history remains. The scope is
  * either the whole repository (every ref, the default) or one branch / remote-
@@ -347,7 +347,7 @@ export async function readLog(repo, limit, offset, config, branch) {
   const format = '%H%x1f%h%x1f%P%x1f%an%x1f%at%x1f%s%x1e'
   const args = ['log', '-n', String(count + 1)]
   if (skip > 0) args.push('--skip', String(skip))
-  args.push('--topo-order', '--no-color', `--pretty=format:${format}`)
+  args.push('--date-order', '--no-color', `--pretty=format:${format}`)
   if (scope === null) {
     args.push('--all')
   } else {

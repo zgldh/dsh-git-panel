@@ -147,6 +147,7 @@ window.__ModuleLoader__.load({
 
       'columns.author': '作者列宽度',
       'columns.time': '时间列宽度',
+      'columns.graph': '提交图列宽度',
       'split.label': '调整源代码管理宽度',
 
       'ai.action': 'AI',
@@ -313,6 +314,7 @@ window.__ModuleLoader__.load({
 
       'columns.author': 'Author column width',
       'columns.time': 'Time column width',
+      'columns.graph': 'Commit graph column width',
       'split.label': 'Resize source control',
 
       'ai.action': 'AI',
@@ -356,6 +358,10 @@ window.__ModuleLoader__.load({
     const GRAPH_MIN_WIDTH = 16
     /** Lanes beyond this count are clipped; the row would otherwise lose its text columns. */
     const GRAPH_MAX_LANES = 10
+    /** Widest commit-graph column the reader can drag it to, in pixels. */
+    const GRAPH_MAX_WIDTH = 360
+    /** Keyboard step of the commit-graph column, in pixels. */
+    const GRAPH_STEP = 8
     /** Branch-line palette; fixed because the graph is a drawn figure, not text. */
     const LANE_COLORS = [
       '#4c9aff',
@@ -420,6 +426,8 @@ window.__ModuleLoader__.load({
     const SCROLLBAR_GUTTER = 10
     /** Storage key of the author/time column widths. */
     const COLUMNS_STORAGE_KEY = 'dsh.git.columns'
+    /** Storage key of an explicit commit-graph column width; absent means "fit the lanes". */
+    const GRAPH_STORAGE_KEY = 'dsh.git.graphWidth'
     /** Default source-control pane width, in pixels. */
     const SPLIT_DEFAULT = 340
     /** Narrowest source-control pane, in pixels. */
@@ -859,6 +867,35 @@ window.__ModuleLoader__.load({
         window.localStorage.setItem(key, text)
       } catch {
         // Layout persistence is a convenience; a refused write keeps the current width.
+      }
+    }
+
+    /**
+     * Drop one persisted layout value, ignoring a refused removal.
+     * @param key - storage key.
+     */
+    function removeStorage(key) {
+      try {
+        window.localStorage.removeItem(key)
+      } catch {
+        // A refused removal only leaves the previous layout value in place.
+      }
+    }
+
+    /**
+     * Load the explicit commit-graph column width.
+     * @returns the width, or null when the column should fit its lanes.
+     */
+    function readGraphWidth() {
+      try {
+        const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY)
+        if (raw === null) return null
+        const value = Number(raw)
+        if (!Number.isFinite(value) || value <= 0) return null
+        return clamp(Math.round(value), GRAPH_MIN_WIDTH, GRAPH_MAX_WIDTH)
+      } catch {
+        // A blocked store means the column fits its lanes.
+        return null
       }
     }
 
@@ -1379,7 +1416,7 @@ window.__ModuleLoader__.load({
      * Colours travel with the line, not with the lane index: `laneColors` runs
      * parallel to `lanes` and holds palette indices, so a lane keeps its colour
      * for its whole life, and only a brand-new branch line draws a new one.
-     * @param commits - commits in topological order, newest first.
+     * @param commits - commits in date order, newest first.
      * @returns the rows with their geometry, and the widest lane count.
      */
     function buildGraph(commits) {
@@ -3037,29 +3074,33 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Render the two invisible column resize handles over the commit list.
-     * @param options - current widths, copy, and pointer/keyboard/reset handlers.
+     * Render the invisible column resize handles over the commit list.
+     *
+     * Three handles: the commit-graph column (dragged from its right edge), the
+     * author column, and the time column (both measured from the row's right
+     * edge). Double-clicking a handle restores that column's automatic width.
+     * @param options - current widths, graph width, copy, and pointer/keyboard/reset handlers.
      * @returns the handle overlay.
      */
     function renderColumnHandles(options) {
-      const { columns, dragging, t, onStart, onStep, onReset } = options
-      const handle = (kind, width, right) => h('div', {
+      const { columns, graphWidth, dragging, t, onStart, onStep, onReset } = options
+      const handle = (kind, width, position, label, min, max, stepOf) => h('div', {
         key: kind,
         className: 'dsh-git-colHandle',
         role: 'separator',
         'aria-orientation': 'vertical',
-        'aria-label': kind === 'author' ? t('columns.author') : t('columns.time'),
-        'aria-valuenow': width,
-        'aria-valuemin': COLUMN_MIN,
-        'aria-valuemax': COLUMN_MAX,
+        'aria-label': label,
+        'aria-valuenow': Math.round(width),
+        'aria-valuemin': min,
+        'aria-valuemax': max,
         tabIndex: 0,
         'data-dragging': dragging === kind ? 'true' : 'false',
-        style: { right },
+        style: position,
         onPointerDown: (event) => { event.preventDefault(); onStart(kind, event) },
         onKeyDown: (event) => {
           if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
           event.preventDefault()
-          onStep(kind, event.key === 'ArrowLeft' ? COLUMN_STEP : -COLUMN_STEP)
+          onStep(kind, stepOf(event.key === 'ArrowLeft' ? -1 : 1))
         },
         onDoubleClick: () => { onReset(kind) },
       })
@@ -3068,8 +3109,33 @@ window.__ModuleLoader__.load({
         className: 'dsh-git-colHandles',
         style: { right: SCROLLBAR_GUTTER },
       }, [
-        handle('time', columns.time, ROW_PADDING_RIGHT + columns.time - 3),
-        handle('author', columns.author, ROW_PADDING_RIGHT + columns.time + columns.author - 3),
+        handle(
+          'graph',
+          graphWidth,
+          { left: 2 + graphWidth - 3 },
+          t('columns.graph'),
+          GRAPH_MIN_WIDTH,
+          GRAPH_MAX_WIDTH,
+          (direction) => direction * GRAPH_STEP,
+        ),
+        handle(
+          'time',
+          columns.time,
+          { right: ROW_PADDING_RIGHT + columns.time - 3 },
+          t('columns.time'),
+          COLUMN_MIN,
+          COLUMN_MAX,
+          (direction) => -direction * COLUMN_STEP,
+        ),
+        handle(
+          'author',
+          columns.author,
+          { right: ROW_PADDING_RIGHT + columns.time + columns.author - 3 },
+          t('columns.author'),
+          COLUMN_MIN,
+          COLUMN_MAX,
+          (direction) => -direction * COLUMN_STEP,
+        ),
       ])
     }
 
@@ -3160,6 +3226,7 @@ window.__ModuleLoader__.load({
       const [browseNodes, setBrowseNodes] = useState(() => ({}))
       const [expandedPaths, setExpandedPaths] = useState(() => ({}))
       const [columns, setColumns] = useState(readColumnWidths)
+      const [graphWidthOverride, setGraphWidthOverride] = useState(readGraphWidth)
       const [columnDrag, setColumnDrag] = useState(null)
       const [splitWidth, setSplitWidth] = useState(readSplitWidth)
       const [splitMax, setSplitMax] = useState(SPLIT_DEFAULT)
@@ -3204,6 +3271,8 @@ window.__ModuleLoader__.load({
       const columnsRef = useRef(columns)
       const splitValueRef = useRef(splitWidth)
       const graphWidthRef = useRef(GRAPH_MIN_WIDTH)
+      const graphWidthOverrideRef = useRef(graphWidthOverride)
+      const graphAutoWidthRef = useRef(GRAPH_MIN_WIDTH)
       const sideScrollRef = useRef(null)
       const firstLoadRef = useRef(true)
       const latestViewRef = useRef(null)
@@ -3215,7 +3284,10 @@ window.__ModuleLoader__.load({
 
       const graph = useMemo(() => buildGraph(commits), [commits])
       const branchRows = useMemo(() => branchFilterRows(branches, branchQuery), [branches, branchQuery])
-      const graphWidth = Math.max(GRAPH_MIN_WIDTH, Math.min(graph.laneCount, GRAPH_MAX_LANES) * LANE_WIDTH)
+      const graphAutoWidth = Math.max(GRAPH_MIN_WIDTH, Math.min(graph.laneCount, GRAPH_MAX_LANES) * LANE_WIDTH)
+      const graphWidth = graphWidthOverride === null
+        ? graphAutoWidth
+        : Math.max(graphAutoWidth, Math.min(GRAPH_MAX_WIDTH, Math.round(graphWidthOverride)))
 
       useEffect(() => {
         callRef.current = props.call
@@ -3248,6 +3320,14 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         graphWidthRef.current = graphWidth
       }, [graphWidth])
+
+      useEffect(() => {
+        graphAutoWidthRef.current = graphAutoWidth
+      }, [graphAutoWidth])
+
+      useEffect(() => {
+        graphWidthOverrideRef.current = graphWidthOverride
+      }, [graphWidthOverride])
 
       const invoke = useCallback((action, params, signal) => {
         const call = callRef.current
@@ -3309,6 +3389,44 @@ window.__ModuleLoader__.load({
         updated[kind] = next
         columnsRef.current = updated
         setColumns(updated)
+      }, [])
+
+      /** Apply a dragged or keyed commit-graph column width; never narrower than its lanes. */
+      const applyGraphWidth = useCallback((raw) => {
+        const auto = graphAutoWidthRef.current
+        let max = GRAPH_MAX_WIDTH
+        const node = listRef.current
+        if (node !== null) {
+          const width = node.getBoundingClientRect().width
+          if (width > 0) {
+            const available = width - SCROLLBAR_GUTTER - ROW_PADDING_RIGHT - ROW_LEAD_RESERVE - SUBJECT_MIN_WIDTH
+              - columnsRef.current.author - columnsRef.current.time
+            max = Math.max(auto, Math.min(GRAPH_MAX_WIDTH, Math.round(available)))
+          }
+        }
+        const next = clamp(Math.round(raw), auto, max)
+        if (next <= auto) {
+          if (graphWidthOverrideRef.current === null) return
+          graphWidthOverrideRef.current = null
+          setGraphWidthOverride(null)
+          return
+        }
+        if (next === graphWidthOverrideRef.current) return
+        graphWidthOverrideRef.current = next
+        setGraphWidthOverride(next)
+      }, [])
+
+      /** Persist the commit-graph column width; the automatic width stores nothing. */
+      const persistGraphWidth = useCallback(() => {
+        if (graphWidthOverrideRef.current === null) removeStorage(GRAPH_STORAGE_KEY)
+        else writeStorage(GRAPH_STORAGE_KEY, String(graphWidthOverrideRef.current))
+      }, [])
+
+      /** Restore the commit-graph column to the width its lanes need. */
+      const resetGraphWidth = useCallback(() => {
+        graphWidthOverrideRef.current = null
+        setGraphWidthOverride(null)
+        removeStorage(GRAPH_STORAGE_KEY)
       }, [])
 
       const applySplitWidth = useCallback((raw) => {
@@ -3512,11 +3630,16 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (columnDrag === null) return undefined
         const onMove = (event) => {
-          applyColumnWidth(columnDrag.kind, columnDrag.startWidth + (columnDrag.startX - event.clientX))
+          if (columnDrag.kind === 'graph') {
+            applyGraphWidth(columnDrag.startWidth + (event.clientX - columnDrag.startX))
+          } else {
+            applyColumnWidth(columnDrag.kind, columnDrag.startWidth + (columnDrag.startX - event.clientX))
+          }
         }
         const onUp = () => {
           setColumnDrag(null)
-          persistColumns()
+          if (columnDrag.kind === 'graph') persistGraphWidth()
+          else persistColumns()
         }
         window.addEventListener('pointermove', onMove)
         window.addEventListener('pointerup', onUp)
@@ -3526,7 +3649,7 @@ window.__ModuleLoader__.load({
           window.removeEventListener('pointerup', onUp)
           window.removeEventListener('pointercancel', onUp)
         }
-      }, [columnDrag, applyColumnWidth, persistColumns])
+      }, [columnDrag, applyColumnWidth, applyGraphWidth, persistColumns, persistGraphWidth])
 
       useEffect(() => {
         if (splitDrag === null) return undefined
@@ -4934,16 +5057,27 @@ window.__ModuleLoader__.load({
           }, items.concat(footer))),
           renderColumnHandles({
             columns,
+            graphWidth,
             dragging: columnDrag === null ? null : columnDrag.kind,
             t,
             onStart: (kind, event) => {
-              setColumnDrag({ kind, startX: event.clientX, startWidth: columnsRef.current[kind] })
+              const startWidth = kind === 'graph' ? graphWidth : columnsRef.current[kind]
+              setColumnDrag({ kind, startX: event.clientX, startWidth })
             },
             onStep: (kind, delta) => {
+              if (kind === 'graph') {
+                applyGraphWidth(graphWidthRef.current + delta)
+                persistGraphWidth()
+                return
+              }
               applyColumnWidth(kind, columnsRef.current[kind] + delta)
               persistColumns()
             },
             onReset: (kind) => {
+              if (kind === 'graph') {
+                resetGraphWidth()
+                return
+              }
               const defaults = { author: AUTHOR_WIDTH_DEFAULT, time: TIME_WIDTH_DEFAULT }
               applyColumnWidth(kind, defaults[kind])
               persistColumns()

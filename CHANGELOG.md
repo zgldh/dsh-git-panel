@@ -11,6 +11,20 @@ moved or reshaped behaviour under `Changed`, corrected behaviour under `Fixed`.
 
 - Nothing yet.
 
+## 2.1.0
+
+### Added
+
+- The commit-graph column is now resizable: drag its right edge (or use the
+  arrow keys when the handle is focused) and double-click it to return to the
+  width the lanes need. The width persists locally.
+
+### Changed
+
+- Commits are ordered by commit date (`git log --date-order`) instead of
+  topological order, matching the Git Graph extension's default: commits from
+  parallel branches now interleave by time instead of grouping by lane.
+
 ## 2.0.1
 
 ### Fixed
